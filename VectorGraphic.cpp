@@ -28,7 +28,8 @@ std::vector<ConnectionStart> VectorGraphic::GetConnected(std::vector<std::shared
 	return connectionStarts;
 }
 
-bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<PolylinePointer> Polylines, VE::Point& result, double maxDist2)
+bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<PolylinePointer> Polylines,
+	VE::Point& result, double maxDist2)
 {
 	bool found = false;
 
@@ -43,13 +44,18 @@ bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<Po
 
 			if (dist2 < maxDist2) {
 				found = true;
-				result = direction;
+				result = otherPt;
 				maxDist2 = dist2;
 			}
 		}
 	}
 
 	return found;
+}
+
+const double SNAPPING_DISTANCE2 = 0.1;
+VectorGraphic::VectorGraphic()
+{
 }
 
 
@@ -131,6 +137,9 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 		}
 		myfile.close();
 	}
+	std::cout << "Snapping...";
+	SnapEndpoints();
+	std::cout << " done\n";
 	//RemoveOverlaps();
 	//MergeConnected();
 	//RemoveIntersections();
@@ -140,7 +149,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 
 // Snap endpoints of curves
 void VectorGraphic::SnapEndpoints()
-{/*
+{
 	for (size_t i = 0; i < Polylines.size(); i++)
 	{
 		auto& polyline = Polylines[i];
@@ -153,6 +162,7 @@ void VectorGraphic::SnapEndpoints()
 		VE::Point &start = points.front();
 		VE::Point &end = points.back();
 
+
 		VE::Point closest;
 
 		if (closestPointInRange(start, otherLines, closest, SNAPPING_DISTANCE2)) {
@@ -164,11 +174,11 @@ void VectorGraphic::SnapEndpoints()
 			end = closest;
 		}
 
-		if (lineChanged) {
+		/*if (lineChanged) {
 			std::cout << "Snapped endpoint(s) of line " << i << "\n";
 			polyline->Cleanup();
-		}
-	}*/
+		}*/
+	}
 }
 
 

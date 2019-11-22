@@ -16,7 +16,6 @@ class VectorGraphic {
 
 private:
 
-	const double SNAPPING_DISTANCE2 = 0.1;
 	std::vector<ConnectionStart> GetConnected(std::vector<PolylinePointer>::iterator startElement, VE::Point &pt);
 
 	// returns the closest point on the polyline
@@ -25,7 +24,7 @@ private:
 		VE::Point& result, double maxDist2);
 public:
 
-	VectorGraphic() {};
+	VectorGraphic();
 	
 
 	std::vector<PolylinePointer> Polylines;
