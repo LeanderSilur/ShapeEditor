@@ -110,10 +110,93 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 		}
 		myfile.close();
 	}
+	RemoveOverlaps();
 	//MergeConnected();
 	//RemoveIntersections();
 
 	//RemoveMaxLength();
+}
+
+// Trace 
+
+//TODO trace in direction to determine overlap
+// starting at lineA[a] == lineB[b]
+void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Point>& lineB, int& a, int b) {
+	int traceDir;
+	int exitB;
+
+	// trace B forwards (else backwards)
+	if (lineB.size() != b + 1 && lineA[a + 1] == lineB[b + 1]) {
+		traceDir = 1;
+		exitB = lineB.size() - 1;
+	}
+	else if (-1 != b - 1 && lineA[a + 1] == lineB[b - 1]) {
+		traceDir = -1;
+		exitB = 0;
+	}
+	else {
+		// only initial point is the same
+		return;
+	}
+
+	do {
+		a++;
+		b += traceDir;
+	} while (
+		a != lineA.size() &&
+		b != exitB &&
+		lineA[a] == lineB[b]
+		);
+
+	return;
+}
+
+// Remove Doubles (Curves Segments which overlap)
+// and split curves into separate segments at intersections
+void VectorGraphic::RemoveOverlaps()
+{
+	decltype(Polylines) newPolylines;
+
+	for (size_t i = 0; i < Polylines.size(); i++)
+	{
+		// Take one out.
+		auto & polyline = Polylines[i];
+		std::vector<VE::Point>& points = polyline->getPoints();
+
+		for (size_t j = 0; j < points.size() - 1; j++)
+		{
+			// Compare to all the other polylines
+			for (auto otherLine = Polylines.begin() + i + 1; otherLine != Polylines.end(); otherLine++)
+			{
+				int indexB = (*otherLine)->PointIndex(points[j]);
+				// indexB is >= 0 if there a same point from an otherLine
+				if (indexB >= 0) {
+					int end = j;
+					TraceOverlap(points, (*otherLine)->getPoints(), end, indexB);
+					// Check that the segment is longer than 1 point.
+					if (end - j > 1) {
+						std::cout << "Removing overlap: " << j << " - " << end << "\n";
+
+						// Removing from the middle.
+						// Split the vector first, to chop the untouched first part.
+						if (j > 0) {
+							std::vector<VE::Point> choppedPoints(points.begin(), points.begin() + j + 1);
+							newPolylines.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+						}
+						points.erase(points.begin(), points.begin() + end);
+						j = -1;
+						// break to the start of looping through all points
+						// (which are left) and looping through all other lines.
+						break;
+					}
+				}
+			}
+
+		}
+		if (points.size() > 1)
+			newPolylines.push_back(std::make_shared<VE::Polyline>(points));
+	}
+	Polylines = newPolylines;
 }
 
 void VectorGraphic::RemoveIntersections()
@@ -187,15 +270,15 @@ void VectorGraphic::MergeConnected()
 	std::cout << "Ending with " << Polylines.size() << "\n";
 }
 
-void VectorGraphic::ClosestPoint(cv::Mat & img, VE::Transform2D & t, double & distance, VE::Point & pt,
+void VectorGraphic::ClosestPoint(cv::Mat & img, VE::Transform2D & t, double & distance, const VE::Point & pt,
 	VE::Point & closest, std::shared_ptr<VE::VectorElement>& element)
 {
-	cv::Rect2f bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
+	cv::Rect2d bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
 	int id = 0,
 		closest_id = 0;
 	for (auto el = Polylines.begin(); el != Polylines.end(); el++) {
 		VE::VectorElement * ve = el->get();
-		if (ve->InRect(bounds)) {
+		if (ve->AnyPointInRect(bounds)) {
 			double previous = distance;
 			el->get()->Closest2(pt, distance, closest);
 			if (previous != distance) {
@@ -210,21 +293,19 @@ void VectorGraphic::ClosestPoint(cv::Mat & img, VE::Transform2D & t, double & di
 
 void VectorGraphic::Draw(cv::Mat & img)
 {
-
 	for (auto el = Polylines.begin(); el != Polylines.end(); el++){
 		VE::VectorElement * ve = el->get();
 		el->get()->Draw(img);
 	}
-
 }
 
 void VectorGraphic::Draw(cv::Mat & img, VE::Transform2D& t)
 {
-	cv::Rect2f bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
+	cv::Rect2d bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
 
 	for (auto el = Polylines.begin(); el != Polylines.end(); el++) {
 		VE::VectorElement * ve = el->get();
-		if (ve->InRect(bounds)) {
+		if (ve->AnyPointInRect(bounds)) {
 			el->get()->Draw(img, t);
 		}
 	}

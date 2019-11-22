@@ -24,11 +24,12 @@ public:
 
 	void LoadPolylines(std::string path);
 
+	void RemoveOverlaps();
 	void RemoveIntersections();
 	void RemoveMaxLength(int length = 12);
 	void MergeConnected();
 
-	void ClosestPoint(cv::Mat& img, VE::Transform2D& t, double& distance, VE::Point& pt,
+	void ClosestPoint(cv::Mat& img, VE::Transform2D& t, double& distance, const VE::Point& pt,
 		VE::Point& closest, std::shared_ptr<VE::VectorElement>& element);
 
 	void Draw(cv::Mat & img);

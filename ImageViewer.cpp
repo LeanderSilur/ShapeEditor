@@ -100,15 +100,22 @@ void ImageViewer::ShowMat()
 		VE::Point mousePos(pointPreview.startPos.x(),pointPreview.startPos.y());
 		VE::transformInv(mousePos,t);
 		
-		double distance = 10000;
+		double distance = VE::DMAX;
 		vectorGraphic.ClosestPoint(
 			display, t, distance,
 			mousePos, result, element);
+
 		VE::transform(result, t);
-		if (distance < 10000) {
+		if (distance < VE::DMAX) {
 			cv::circle(display, result, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
 			element->Draw(display, t, true);
 		}
+
+		auto it = std::find(vectorGraphic.Polylines.begin(), vectorGraphic.Polylines.end(), element);
+		int elIndex = std::distance(vectorGraphic.Polylines.begin(), it);
+		VE::Point res(result);
+		VE::transformInv(res, t);
+		std::cout << "index: " << elIndex << ", (" << res.x << "|" << res.y << ")\n";
 	}
 
 

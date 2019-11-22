@@ -10,7 +10,7 @@
 
 namespace VE {
 
-	const double FMAX = std::numeric_limits<double>::max();
+	const double DMAX = std::numeric_limits<double>::max();
 
 	const double EPSILON = FLT_EPSILON;
 	const double EPSILON_PLUS_ONE = 1 + EPSILON;
@@ -28,16 +28,28 @@ namespace VE {
 		pt *= t.scale;
 		pt.x += t.x; pt.y += t.y;
 	};
-	inline void transform(double& d, Transform2D& t) {
-		d *= t.scale;
-	};
 	inline void transformInv(Point& pt, Transform2D& t) {
 		pt.x -= t.x; pt.y -= t.y;
 		pt /= t.scale;
 	};
-	inline void transformInv(double &d, Transform2D& t) {
+	inline void transform(double& d, Transform2D& t) {
+		d *= t.scale;
+	};
+	inline void transformInv(double& d, Transform2D& t) {
 		d /= t.scale;
-	}; 
+	};
+	inline void transform(cv::Rect2d& rect, Transform2D& t) {
+		rect.x = t.scale * rect.x + t.x;
+		rect.y = t.scale * rect.y + t.y;
+		rect.width *= t.scale;
+		rect.height *= t.scale;
+	};
+	inline void transformInv(cv::Rect2d& rect, Transform2D& t) {
+		rect.x = (rect.x - t.x) / t.scale;
+		rect.y = (rect.y - t.y) / t.scale;
+		rect.width /= t.scale;
+		rect.height /= t.scale;
+	};
 
 	inline bool LinesIntersect(Point & p, Point & p2, Point & q, Point & q2, Point& result);
 	
@@ -49,10 +61,10 @@ namespace VE {
 
 		virtual void Draw(cv::Mat & img) = 0;
 		virtual void Draw(cv::Mat & img, Transform2D & t, bool highlight = false) = 0;
-		virtual bool InRect(cv::Rect2f & rect) = 0;
+		virtual bool AnyPointInRect(cv::Rect2d & rect) = 0;
 		virtual double Distance2(Point & pt) = 0;
 		virtual void Closest2(
-			Point & pt,
+			const Point & from,
 			double& distance2, // init with std::numeric_limits<double>::max()
 			Point & closest) = 0;
 	};
@@ -64,7 +76,7 @@ namespace VE {
 	private:
 		std::vector<Point> points;
 		
-		cv::Rect2f bounds;
+		cv::Rect2d bounds;
 		cv::Mat_<double> features;
 		std::shared_ptr<cv::flann::Index> flannIndex;
 		double maxLength;
@@ -72,7 +84,7 @@ namespace VE {
 		bool Removedoubles();
 		void calculateKDTree();
 		void calculateBounds();
-		double distancePointLine2(Point &u, Point &v, Point &p, Point&result);
+		double distancePointLine2(const Point &u, const Point &v, const Point &p, Point&result);
 		std::shared_ptr<Polyline> splitOffAt(int &at, Point&intersection);
 
 		void Cleanup() {
@@ -81,7 +93,9 @@ namespace VE {
 			calculateKDTree();
 		};
 	public:
-		void setPoints(std::vector<Point> & inputPoints);
+		void printBounds() { std::cout << "bounds " << bounds << "\n"; };
+		void setPoints(std::vector<Point>& inputPoints);
+		std::vector<Point>& getPoints();
 		std::shared_ptr<Polyline> splitIntersecting(Polyline & other);
 
 		Polyline() {};
@@ -93,12 +107,13 @@ namespace VE {
 
 		void Draw(cv::Mat & img) override;
 		void Draw(cv::Mat & img, Transform2D & t, bool highlight = false) override;
-		bool InRect(cv::Rect2f & rect) override;
+		bool AnyPointInRect(cv::Rect2d & rect) override;
 		double Distance2(Point & pt) override;
 		void Closest2(
-			Point & pt,
+			const Point& pt,
 			double & distance2,
 			Point & closest) override;
+		int PointIndex(const Point& pt);
 		bool LongEnough() { return points.size() >=2; };
 		size_t Length() { return points.size(); };
 
@@ -116,7 +131,7 @@ namespace VE {
 	private:
 		Point points[4];
 		Point coefficients[4];
-		cv::Rect2f bounds;
+		cv::Rect2d bounds;
 
 		void CalculateCoefficients();
 		void calculateBounds();
@@ -137,10 +152,10 @@ namespace VE {
 
 		void Draw(cv::Mat & img) override;
 		void Draw(cv::Mat & img, Transform2D & t, bool highlight = false) override;
-		bool InRect(cv::Rect2f & rect) override;
+		bool AnyPointInRect(cv::Rect2d & rect) override;
 		double Distance2(Point & pt) override;
 		void Closest2(
-			Point & pt,
+			const Point& pt,
 			double & distance,
 			Point & closest) override;
 	};
