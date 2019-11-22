@@ -79,7 +79,7 @@ namespace VE {
 		cv::Rect2d bounds;
 		cv::Mat_<double> features;
 		std::shared_ptr<cv::flann::Index> flannIndex;
-		double maxLength;
+		double maxLength = -1;
 
 		bool Removedoubles();
 		void calculateKDTree();
@@ -87,20 +87,24 @@ namespace VE {
 		double distancePointLine2(const Point &u, const Point &v, const Point &p, Point&result);
 		std::shared_ptr<Polyline> splitOffAt(int &at, Point&intersection);
 
+	public:
 		void Cleanup() {
 			Removedoubles();
 			calculateBounds();
 			calculateKDTree();
 		};
-	public:
-		void printBounds() { std::cout << "bounds " << bounds << "\n"; };
+
 		void setPoints(std::vector<Point>& inputPoints);
+		Point& getPoint(const int& i) { return points[i]; };
 		std::vector<Point>& getPoints();
 		std::shared_ptr<Polyline> splitIntersecting(Polyline & other);
 
-		Polyline() {};
+		Polyline();
 		Polyline(std::vector<Point> & points);
-		~Polyline() {};
+		~Polyline();
+
+		Point& Front() { return points.front(); };
+		Point& Back() { return points.back(); };
 
 		void PrependMove(Polyline & other, bool fromBackPoint);
 		void AppendMove(Polyline & other, bool fromBackPoint);
@@ -113,7 +117,7 @@ namespace VE {
 			const Point& pt,
 			double & distance2,
 			Point & closest) override;
-		int PointIndex(const Point& pt);
+		int PointIndex(const Point& pt, const double& maxDist2 = 0);
 		bool LongEnough() { return points.size() >=2; };
 		size_t Length() { return points.size(); };
 

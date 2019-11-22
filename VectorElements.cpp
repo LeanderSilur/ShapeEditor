@@ -261,9 +261,17 @@ namespace VE {
 		return std::shared_ptr<Polyline>();
 	}
 
+	Polyline::Polyline()
+	{
+	}
+
 	Polyline::Polyline(std::vector<Point>& points)
 	{
 		setPoints(points);
+	}
+
+	Polyline::~Polyline()
+	{
 	}
 
 	void Polyline::PrependMove(Polyline & other, bool fromBackPoint)
@@ -390,6 +398,7 @@ namespace VE {
 		// The distance2 parameter is the squared maximum distance.
 		// cv::flann uses the squared distance, but I need to add
 		// maxLength/2  ^2
+		// TRUST ME!!!! I've checked this twice. Even though the param name is called radius.
 		double maxDistance = distance2 + maxLength * maxLength / 4 + EPSILON;
 
 		cv::Mat query = (cv::Mat_<float>(1, 2) << from.x, from.y);
@@ -437,18 +446,24 @@ namespace VE {
 		}
 	}
 
-	int Polyline::PointIndex(const Point& pt)
+	int Polyline::PointIndex(const Point& pt, const double& maxDist2)
 	{
-		if (!this->bounds.contains(pt))
-			return -2;
+		decltype(bounds) boundsDilated(bounds);
 
-		if (pt == Point(36.9599, 69.9579)) {
-			std::cout << "       searching\n";
+		if (maxDist2 > 0) {
+			double maxDist = std::sqrt(maxDist2);
+			bounds.x -= maxDist;
+			bounds.y -= maxDist;
+			bounds.width += 2 * maxDist;
+			bounds.height += 2 * maxDist;
 		}
+
+		if (!boundsDilated.contains(pt))
+			return -1;
 
 		cv::Mat query = (cv::Mat_<float>(1, 2) << pt.x, pt.y);
 		cv::Mat indices, dists;
-		flannIndex->radiusSearch(query, indices, dists, 0, 1, cv::flann::SearchParams(32));
+		flannIndex->radiusSearch(query, indices, dists, maxDist2, 1, cv::flann::SearchParams(32));
 
 		return indices.at<int>(0);
 	}

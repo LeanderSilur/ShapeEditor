@@ -28,8 +28,38 @@ std::vector<ConnectionStart> VectorGraphic::GetConnected(std::vector<std::shared
 	return connectionStarts;
 }
 
+bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<PolylinePointer> Polylines, VE::Point& result, double maxDist2)
+{
+	bool found = false;
+
+	for (auto&polyline: Polylines)
+	{
+		int index = polyline->PointIndex(center, maxDist2);
+		if (index >= 0)
+		{
+			VE::Point otherPt = polyline->getPoint(index);
+			VE::Point direction = otherPt - center;
+			double dist2 = direction.x * direction.x + direction.y * direction.y;
+
+			if (dist2 < maxDist2) {
+				found = true;
+				result = direction;
+				maxDist2 = dist2;
+			}
+		}
+	}
+
+	return found;
+}
+
+
 VectorGraphic::VectorGraphic()
 {
+}
+
+VectorGraphic::VectorGraphic(const VectorGraphic& other)
+{
+	Polylines = other.Polylines;
 }
 
 const char * quotationMark = "\"'";
@@ -81,7 +111,6 @@ void getPoints(std::vector<VE::Point> & points, std::string line)
 
 }
 
-
 void VectorGraphic::LoadPolylines(std::string svgPath)
 {
 	std::string line;
@@ -110,16 +139,48 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 		}
 		myfile.close();
 	}
-	RemoveOverlaps();
+	//RemoveOverlaps();
 	//MergeConnected();
 	//RemoveIntersections();
 
 	//RemoveMaxLength();
 }
 
-// Trace 
+// Snap endpoints of curves
+void VectorGraphic::SnapEndpoints()
+{/*
+	for (size_t i = 0; i < Polylines.size(); i++)
+	{
+		auto& polyline = Polylines[i];
+		auto& points = polyline->getPoints();
+		// Construct a new Vector with references to all the other polylines
+		decltype(Polylines) otherLines(Polylines);
+		otherLines.erase(otherLines.begin() + i);
 
-//TODO trace in direction to determine overlap
+		bool lineChanged = false;
+		VE::Point &start = points.front();
+		VE::Point &end = points.back();
+
+		VE::Point closest;
+
+		if (closestPointInRange(start, otherLines, closest, SNAPPING_DISTANCE2)) {
+			lineChanged = true;
+			start = closest;
+		}
+		if (closestPointInRange(end, otherLines, closest, SNAPPING_DISTANCE2)) {
+			lineChanged = true;
+			end = closest;
+		}
+
+		if (lineChanged) {
+			std::cout << "Snapped endpoint(s) of line " << i << "\n";
+			polyline->Cleanup();
+		}
+	}*/
+}
+
+
+// trace in direction to determine overlap
 // starting at lineA[a] == lineB[b]
 void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Point>& lineB, int& a, int b) {
 	int traceDir;
@@ -162,7 +223,7 @@ void VectorGraphic::RemoveOverlaps()
 		// Take one out.
 		auto & polyline = Polylines[i];
 		std::vector<VE::Point>& points = polyline->getPoints();
-
+		
 		for (size_t j = 0; j < points.size() - 1; j++)
 		{
 			// Compare to all the other polylines
@@ -171,6 +232,13 @@ void VectorGraphic::RemoveOverlaps()
 				int indexB = (*otherLine)->PointIndex(points[j]);
 				// indexB is >= 0 if there a same point from an otherLine
 				if (indexB >= 0) {
+					// Split the vector first, to chop the untouched first part.
+					// This will happen independently of wether the next points are connected.
+					if (j > 0) {
+						std::vector<VE::Point> choppedPoints(points.begin(), points.begin() + j + 1);
+						newPolylines.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+					}
+
 					int end = j;
 					TraceOverlap(points, (*otherLine)->getPoints(), end, indexB);
 					// Check that the segment is longer than 1 point.
@@ -178,16 +246,15 @@ void VectorGraphic::RemoveOverlaps()
 						std::cout << "Removing overlap: " << j << " - " << end << "\n";
 
 						// Removing from the middle.
-						// Split the vector first, to chop the untouched first part.
-						if (j > 0) {
-							std::vector<VE::Point> choppedPoints(points.begin(), points.begin() + j + 1);
-							newPolylines.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-						}
 						points.erase(points.begin(), points.begin() + end);
 						j = -1;
 						// break to the start of looping through all points
 						// (which are left) and looping through all other lines.
 						break;
+					}
+					else {
+						std::cout << "Splitting line: " << j << "\n";
+
 					}
 				}
 			}
@@ -270,7 +337,7 @@ void VectorGraphic::MergeConnected()
 	std::cout << "Ending with " << Polylines.size() << "\n";
 }
 
-void VectorGraphic::ClosestPoint(cv::Mat & img, VE::Transform2D & t, double & distance, const VE::Point & pt,
+void VectorGraphic::ClosestElement(cv::Mat & img, VE::Transform2D & t, double & distance, const VE::Point & pt,
 	VE::Point & closest, std::shared_ptr<VE::VectorElement>& element)
 {
 	cv::Rect2d bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);

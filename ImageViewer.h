@@ -18,7 +18,7 @@ public:
 
 	ImageViewer(QWidget *parent = nullptr);
 
-	void setGraphic(VectorGraphic & vg) { vectorGraphic = VectorGraphic(vg); }
+	void setGraphic(VectorGraphic& vg) { vectorGraphic = VectorGraphic(vg); };
 	void setMat(cv::Mat mat);
 
 private:

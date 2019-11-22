@@ -101,7 +101,7 @@ void ImageViewer::ShowMat()
 		VE::transformInv(mousePos,t);
 		
 		double distance = VE::DMAX;
-		vectorGraphic.ClosestPoint(
+		vectorGraphic.ClosestElement(
 			display, t, distance,
 			mousePos, result, element);
 
