@@ -25,8 +25,7 @@ private:
 		VE::Point& result, double maxDist2);
 public:
 
-	VectorGraphic();
-	VectorGraphic(const VectorGraphic& other);
+	VectorGraphic() {};
 	
 
 	std::vector<PolylinePointer> Polylines;

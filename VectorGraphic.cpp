@@ -53,14 +53,6 @@ bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<Po
 }
 
 
-VectorGraphic::VectorGraphic()
-{
-}
-
-VectorGraphic::VectorGraphic(const VectorGraphic& other)
-{
-	Polylines = other.Polylines;
-}
 
 const char * quotationMark = "\"'";
 // Parse points from svg line.

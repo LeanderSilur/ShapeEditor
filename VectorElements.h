@@ -79,7 +79,7 @@ namespace VE {
 		cv::Rect2d bounds;
 		cv::Mat_<double> features;
 		std::shared_ptr<cv::flann::Index> flannIndex;
-		double maxLength = -1;
+		double maxLength;
 
 		bool Removedoubles();
 		void calculateKDTree();
@@ -93,7 +93,7 @@ namespace VE {
 			calculateBounds();
 			calculateKDTree();
 		};
-
+		
 		void setPoints(std::vector<Point>& inputPoints);
 		Point& getPoint(const int& i) { return points[i]; };
 		std::vector<Point>& getPoints();
