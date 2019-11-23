@@ -51,9 +51,6 @@ std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const
 	return connections;
 }
 
-VectorGraphic::VectorGraphic()
-{
-}
 
 
 
@@ -137,7 +134,9 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	std::cout << "Overlaps...";
 	RemoveOverlaps();
 	std::cout << " done\n";
+	std::cout << "Merging...";
 	//MergeConnected();
+	std::cout << " done\n";
 	//RemoveIntersections();
 
 	//RemoveMaxLength();
@@ -274,10 +273,6 @@ void VectorGraphic::RemoveOverlaps()
 	}
 }
 
-void ExtendLine(std::vector<VE::Point> &points, std::vector<PolylinePointer> & polylines) {
-
-}
-
 void VectorGraphic::MergeConnected()
 {
 	decltype(Polylines) newPolylines;
@@ -305,9 +300,9 @@ void VectorGraphic::MergeConnected()
 			VE::Point& searchPoint = polyline->Back();
 			if (con.at == Connection::end)
 				searchPoint = polyline->Front();
+
 			// Remove the item from the otherLines
-			auto& it = std::find(otherLines.begin(), otherLines.end(), polyline);
-			otherLines.erase(it);
+			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), polyline));
 
 			// Do the search.
 			nextConnections = GetConnections(searchPoint, otherLines);
@@ -337,17 +332,34 @@ void VectorGraphic::MergeConnected()
 			// Do the search.
 			nextConnections = GetConnections(searchPoint, otherLines);
 		}
-		TODO
 
 		// Finally, check if we have Connections and if yes
 		// remove them from the main list.
 		if (connections.size() > 1) {
-
+			// Contruct a new Point Sequence
+			std::vector<VE::Point> points;
+			for (Connection& con: connections)
+			{
+				std::vector<VE::Point>& newPoints = con.polyline->getPoints();
+				if (con.at == Connection::start) {
+					// this will create doubles.
+					points.insert(points.end(), newPoints.begin(), newPoints.end());
+				}
+				else {
+					points.insert(points.end(), newPoints.rbegin(), newPoints.rend());
+				}
+				Polylines.erase(std::find(Polylines.begin(), Polylines.end(), con.polyline));
+			}
+			PolylinePointer newPolyline = std::make_shared<VE::Polyline>();
+			newPolyline->setPoints(points);
+			newPolylines.push_back(newPolyline);
 		}
 		else {
 			newPolylines.push_back(Polylines[0]);
+			Polylines.erase(Polylines.begin());
 		}
 	}
+	Polylines = newPolylines;
 }
 
 void VectorGraphic::ClosestElement(cv::Mat & img, VE::Transform2D & t, float & distance, const VE::Point & pt,

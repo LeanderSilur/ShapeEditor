@@ -36,7 +36,7 @@ private:
 	std::vector<Connection> GetConnections(const VE::Point& pt, const std::vector<PolylinePointer>& polylines);
 public:
 
-	VectorGraphic();
+	VectorGraphic() {};
 	
 
 	std::vector<PolylinePointer> Polylines;
