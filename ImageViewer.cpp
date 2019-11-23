@@ -100,13 +100,13 @@ void ImageViewer::ShowMat()
 		VE::Point mousePos(pointPreview.startPos.x(),pointPreview.startPos.y());
 		VE::transformInv(mousePos,t);
 		
-		double distance = VE::DMAX;
+		float distance = VE::FMAX;
 		vectorGraphic.ClosestElement(
 			display, t, distance,
 			mousePos, result, element);
 
 		VE::transform(result, t);
-		if (distance < VE::DMAX) {
+		if (distance < VE::FMAX) {
 			cv::circle(display, result, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
 			element->Draw(display, t, true);
 		}
@@ -161,8 +161,8 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent * event)
 void ImageViewer::wheelEvent(QWheelEvent* event) {
 	if (grab.active == false) {
 		// Do a scroll.
-		double scrollFactor = 1.2;
-		if (static_cast<double>(event->angleDelta().y()) > 0)
+		float scrollFactor = 1.2;
+		if (static_cast<float>(event->angleDelta().y()) > 0)
 			scrollFactor = 1 / scrollFactor;
 
 		scaleFactor *= scrollFactor;

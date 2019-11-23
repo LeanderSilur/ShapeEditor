@@ -14,8 +14,8 @@ namespace VE {
 	const int BEZIER_LINETYPE = cv::LINE_AA;
 	const int BEZIER_LINETHICKNESS = 1;
 	const cv::Scalar BEZIER_COLOR(80, 120, 200);
-	const double MIN_DRAWING_DISTANCE = 8.0;
-	const double MIN_DRAWING_DISTANCE2 = MIN_DRAWING_DISTANCE * MIN_DRAWING_DISTANCE;
+	const float MIN_DRAWING_DISTANCE = 8.0;
+	const float MIN_DRAWING_DISTANCE2 = MIN_DRAWING_DISTANCE * MIN_DRAWING_DISTANCE;
 
 	const int POLYLINE_LINETYPE = cv::LINE_AA;
 	const int POLYLINE_LINETHICKNESS = 1;
@@ -50,8 +50,8 @@ namespace VE {
 		VE::Point s = q2 - q;
 		VE::Point pq = q - p;
 
-		double uNumerator = (pq).cross(r);
-		double denominator = r.cross(s);
+		float uNumerator = (pq).cross(r);
+		float denominator = r.cross(s);
 
 		// Vectors have no magnitude.
 		if (fabs(uNumerator) < EPSILON && fabs(denominator) < EPSILON) {
@@ -65,8 +65,8 @@ namespace VE {
 			return false;
 		}
 
-		double t = pq.cross(s) / denominator;
-		double u = uNumerator / denominator;
+		float t = pq.cross(s) / denominator;
+		float u = uNumerator / denominator;
 
 
 		bool intersect = (t >= -EPSILON) && (t <= EPSILON_PLUS_ONE)
@@ -94,27 +94,29 @@ namespace VE {
 
 	void Polyline::calculateBounds()
 	{
-		Point start(DMAX, DMAX);
-		Point end(-DMAX, -DMAX);
+		float x0 = FMAX,
+			y0 = FMAX,
+			x1 = -FMAX,
+			y1 = -FMAX;
 
 		for (auto pt = points.begin(); pt != points.end(); pt++) {
-			start.x = std::min(pt->x, start.x);
-			start.y = std::min(pt->y, start.y);
-			end.x = std::max(pt->x, end.x);
-			end.y = std::max(pt->y, end.y);
+			x0 = std::min(pt->x, x0);
+			y0 = std::min(pt->y, y0);
+			x1 = std::max(pt->x, x1);
+			y1 = std::max(pt->y, y1);
 		}
-		this->bounds = decltype(this->bounds)(start, end);
+		this->bounds = Bounds(x0, y0, x1, y1);
 	}
 
-	double Polyline::distancePointLine2(const Point & u, const Point & v, const Point & p, Point & result)
+	float Polyline::distancePointLine2(const Point & u, const Point & v, const Point & p, Point & result)
 	{
 		// |v-u|^2 
 		const Point uv = v - u;
 		Point closest = u;
 		result = u;
-		const double l2 = uv.x*uv.x + uv.y *uv.y;
+		const float l2 = uv.x*uv.x + uv.y *uv.y;
 		if (l2 != 0.0f) {
-			const double t = (p - u).dot(uv) / l2;
+			const float t = (p - u).dot(uv) / l2;
 			
 			if (t >= 1){
 				closest = v;
@@ -159,7 +161,7 @@ namespace VE {
 			newPtr->points.push_back(intersection);
 			std::move(points.begin() + i + 1, points.end(), std::back_inserter(newPtr->points));
 			points.erase(points.begin() + i + 1, points.end());
-			// Duplicate double and cleanup self.
+			// Duplicate float and cleanup self.
 			points.push_back(intersection);
 		}
 
@@ -187,16 +189,15 @@ namespace VE {
 	void Polyline::calculateKDTree()
 	{
 		// Clear the features matrix and the maximum length.
-
 		//Use floats!
 		features = cv::Mat_<float>(0, 2);
-		double maxLength2 = 0.f;
+		float maxLength2 = 0.f;
 
 
 		for (auto pt = points.begin(); pt != points.end(); pt++) {
 			if (pt != points.begin()) {
 				Point direction = *(pt - 1) - *pt;
-				double length2 = direction.x * direction.x + direction.y * direction.y;
+				float length2 = direction.x * direction.x + direction.y * direction.y;
 				maxLength2 = std::max(maxLength2, length2);
 			}
 
@@ -204,6 +205,7 @@ namespace VE {
 			cv::Mat row = (cv::Mat_<float>(1, 2) << pt->x, pt->y);
 			features.push_back(row);
 		}
+
 		maxLength = std::sqrt(maxLength2);
 		flannIndex = std::make_shared<cv::flann::Index>(features, cv::flann::KDTreeIndexParams());
 	}
@@ -213,23 +215,23 @@ namespace VE {
 		throw std::invalid_argument("have to check flann lookup (20 lines below)");
 
 		// Check if the bounds don't overlap.
-		if (bounds.x > other.bounds.x + other.bounds.width
+		/*if (bounds.x > other.bounds.x + other.bounds.width
 			&& bounds.x + bounds.width < other.bounds.x
 			&& bounds.y > other.bounds.y + other.bounds.height
 			&& bounds.y + bounds.height < other.bounds.y) {
 			return std::shared_ptr<Polyline>();
-		}
+		}*/
 
 		// See Closest() for more info.
 		// The maximum distance is simply half of the maximum length of both Polylines
 		// added together.
-		double maxDistance = maxLength * maxLength / 4 + other.maxLength * other.maxLength + EPSILON;
+		float maxDistance = maxLength * maxLength / 4 + other.maxLength * other.maxLength + EPSILON;
 
 
 		for (int i = 0; i < points.size() - 1; i++)
 		{
 			// Center position of segment.
-			cv::Mat query = (cv::Mat_<double>(1, 2) << features[i][0], features[i][1]);
+			cv::Mat query = (cv::Mat_<float>(1, 2) << features[i][0], features[i][1]);
 			cv::Mat indices, dists;
 			other.flannIndex->radiusSearch(query, indices, dists, maxDistance, SEARCH_MAX_NEIGHBOURS,
 				cv::flann::SearchParams(SEARCH_FLANN_CHECKS));
@@ -320,12 +322,12 @@ namespace VE {
 			color = HIGHLIGHT_COLOR;
 
 		// determine the minimum distance between two points
-		double minDist = VE::MIN_DRAWING_DISTANCE;
+		float minDist = VE::MIN_DRAWING_DISTANCE;
 		VE::transformInv(minDist, t);
-		double minDist2 = minDist * minDist;
+		float minDist2 = minDist * minDist;
 
 		if (points.size() < 2) return;
-		const std::vector<cv::Point2d> & points = this->points;
+		const std::vector<cv::Point2f> & points = this->points;
 
 		// Only connect those with a minimum distance.
 		auto point_it = points.begin();
@@ -362,19 +364,16 @@ namespace VE {
 			cv::circle(img, pointB, 1, HIGHLIGHT_CIRCLE_COLOR, 2);
 
 			//Draw bounding box
-			decltype(bounds) transformedBounds(bounds);
+			auto transformedBounds(bounds);
 			VE::transform(transformedBounds, t);
-			const int padding = 8;
-			transformedBounds.x -= padding;
-			transformedBounds.y -= padding;
-			transformedBounds.width += 2* padding;
-			transformedBounds.height += 2* padding;
-			cv::rectangle(img, transformedBounds, BOUNDS_COLOR, BOUNDS_LINETHICKNESS, BOUNDS_LINETYPE);
+			transformedBounds.Pad(8);
+			auto rect = transformedBounds.Rect();
+			cv::rectangle(img, transformedBounds.Rect(), BOUNDS_COLOR, BOUNDS_LINETHICKNESS, BOUNDS_LINETYPE);
 		}
 	}
 
 
-	bool Polyline::AnyPointInRect(cv::Rect2d & rect)
+	bool Polyline::AnyPointInRect(cv::Rect2f & rect)
 	{
 		// Simple implementation, just checking if a point is in the rect.
 		for (auto point = points.begin(); point != points.end(); point++)
@@ -385,21 +384,21 @@ namespace VE {
 		return false;
 	}
 
-	double Polyline::Distance2(Point & pt)
+	float Polyline::Distance2(Point & pt)
 	{
 		Point closest;
-		double distance = DMAX;
+		float distance = FMAX;
 		Closest2(pt, distance, closest);
 		return distance;
 	}
 
-	void Polyline::Closest2(const Point& from, double & distance2, Point & closest)
+	void Polyline::Closest2(const Point& from, float & distance2, Point & closest)
 	{
 		// The distance2 parameter is the squared maximum distance.
 		// cv::flann uses the squared distance, but I need to add
 		// maxLength/2  ^2
 		// TRUST ME!!!! I've checked this twice. Even though the param name is called radius.
-		double maxDistance = distance2 + maxLength * maxLength / 4 + EPSILON;
+		float maxDistance = distance2 + maxLength * maxLength / 4 + EPSILON;
 
 		cv::Mat query = (cv::Mat_<float>(1, 2) << from.x, from.y);
 		cv::Mat indices, dists;
@@ -417,8 +416,8 @@ namespace VE {
 				break;
 			}
 			Point pointOnLine;
-			double distancePrev = DMAX;
-			double distanceNext = DMAX;
+			float distancePrev = FMAX;
+			float distanceNext = FMAX;
 			if (index > 0) {
 				distancePrev = distancePointLine2(points[index], points[index - 1], from, pointOnLine);
 			}
@@ -446,19 +445,16 @@ namespace VE {
 		}
 	}
 
-	int Polyline::PointIndex(const Point& pt, const double& maxDist2)
+	int Polyline::PointIndex(const Point& pt, const float& maxDist2)
 	{
 		decltype(bounds) boundsDilated(bounds);
 
 		if (maxDist2 > 0) {
-			double maxDist = std::sqrt(maxDist2);
-			bounds.x -= maxDist;
-			bounds.y -= maxDist;
-			bounds.width += 2 * maxDist;
-			bounds.height += 2 * maxDist;
+			float maxDist = std::sqrt(maxDist2);
+			boundsDilated.Pad(maxDist);
 		}
 
-		if (!boundsDilated.contains(pt))
+		if (!boundsDilated.Contains(pt))
 			return -1;
 
 		cv::Mat query = (cv::Mat_<float>(1, 2) << pt.x, pt.y);
@@ -468,7 +464,7 @@ namespace VE {
 		return indices.at<int>(0);
 	}
 
-	bool Polyline::Removedoubles()
+	bool Polyline::RemoveDoubles()
 	{
 		if (points.size() < 2) return false;
 		size_t initialSize = points.size();
@@ -506,8 +502,8 @@ namespace VE {
 
 	void Bezier::calculateBounds()
 	{
-		Point start(DMAX, DMAX);
-		Point end(-DMAX, -DMAX);
+		Point start(FMAX, FMAX);
+		Point end(-FMAX, -FMAX);
 
 		for (int i = 0; i < 4; i++) {
 			start.x = std::min(points[i].x, start.x);
@@ -548,7 +544,7 @@ namespace VE {
 		calculateBounds();
 	}
 
-	Bezier::Bezier(double ax, double ay, double bx, double by, double cx, double cy, double dx, double dy)
+	Bezier::Bezier(float ax, float ay, float bx, float by, float cx, float cy, float dx, float dy)
 	{
 		points[0] = Point(ax, ay);
 		points[1] = Point(bx, by);
@@ -566,14 +562,14 @@ namespace VE {
 		calculateBounds();
 	}
 
-	Point Bezier::At(double t)
+	Point Bezier::At(float t)
 	{
 		return coefficients[0] * t*t*t + coefficients[1] * t*t + coefficients[2] * t + coefficients[3];
 	}
 
 	void Bezier::Draw(cv::Mat & mat)
 	{
-		double t = 0;
+		float t = 0;
 		Point pt0 = points[0];
 
 		for (t = 1; t < BEZIER_RESOLUTION; t++)
@@ -600,7 +596,7 @@ namespace VE {
 		transformed.Draw(img);
 	}
 
-	bool Bezier::AnyPointInRect(cv::Rect2d & rect)
+	bool Bezier::AnyPointInRect(cv::Rect2f & rect)
 	{
 		for (int i = 0; i < 4; i++)
 		{
@@ -609,11 +605,11 @@ namespace VE {
 		}
 		return false;
 	}
-	double Bezier::Distance2(Point & pt)
+	float Bezier::Distance2(Point & pt)
 	{
 		return 0;
 	}
-	void Bezier::Closest2(const Point& pt, double & distance, Point & closest)
+	void Bezier::Closest2(const Point& pt, float & distance, Point & closest)
 	{
 	}
 

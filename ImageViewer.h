@@ -24,7 +24,7 @@ public:
 private:
 
 	QPoint position;
-	double scaleFactor = 2;
+	float scaleFactor = 2;
 
 
 	VectorGraphic vectorGraphic;

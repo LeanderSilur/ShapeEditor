@@ -7,21 +7,33 @@
 
 
 typedef std::shared_ptr<VE::Polyline> PolylinePointer;
-typedef struct ConnectionStart {
+typedef struct Connection {
 public:
-	std::vector<std::shared_ptr<VE::Polyline>>::iterator polylineIt;
-	bool fromBackPoint;
+	enum Location { none, start, end };
+	PolylinePointer polyline;
+	Location at;
+
+	void Invert() {
+		if (at == Location::start) at == Location::end;
+		else if (at == Location::end) at == Location::start;
+	};
 };
 class VectorGraphic {
-
 private:
+	// Used in SnapEndpoints(). The distance2 of an endpoint to a
+	// potential intersection point.
+	const float SNAPPING_DISTANCE2 = 0.2;
+	// Used in MergeConnected(). If two linesegments share an enpoint
+	// they can be connected if this angle isn't exceeded.
+	const float MAX_MERGE_ANGLE = CV_PI/16;
 
-	std::vector<ConnectionStart> GetConnected(std::vector<PolylinePointer>::iterator startElement, VE::Point &pt);
 
 	// returns the closest point on the polyline
 	bool closestPointInRange(const VE::Point & center,
- std::vector<PolylinePointer> Polylines,
-		VE::Point& result, double maxDist2);
+		std::vector<PolylinePointer> Polylines,
+		VE::Point& result, float maxDist2);
+	
+	std::vector<Connection> GetConnections(const VE::Point& pt, const std::vector<PolylinePointer>& polylines);
 public:
 
 	VectorGraphic();
@@ -33,12 +45,10 @@ public:
 
 	void SnapEndpoints();
 	void RemoveOverlaps();
-	void RemoveIntersections();
-	void RemoveMaxLength(int length = 12);
 	void MergeConnected();
 
 	// bloated complicated method, used for the imageviewer
-	void ClosestElement(cv::Mat& img, VE::Transform2D& t, double& distance, const VE::Point& pt,
+	void ClosestElement(cv::Mat& img, VE::Transform2D& t, float& distance, const VE::Point& pt,
 		VE::Point& closest, std::shared_ptr<VE::VectorElement>& element);
 
 	void Draw(cv::Mat & img);
