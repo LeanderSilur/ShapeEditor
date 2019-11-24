@@ -7,21 +7,20 @@
 
 class ImageViewer : public QLabel
 {
-	typedef struct MouseAction {
-		bool active = false;
-		QPoint startPos;
-	};
-
 	Q_OBJECT
 
 public:
 
-	ImageViewer(QWidget *parent = nullptr);
+	ImageViewer(QWidget* parent = nullptr);
 
-	void setGraphic(VectorGraphic& vg) { vectorGraphic = VectorGraphic(vg); };
+	void setGraphic(VectorGraphic& vg);
 	void setMat(cv::Mat mat);
 
 private:
+	typedef struct MouseAction {
+		bool active = false;
+		QPoint startPos;
+	};
 
 	QPoint position;
 	float scaleFactor = 2;

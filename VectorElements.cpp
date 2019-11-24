@@ -19,18 +19,37 @@ namespace VE {
 
 	const int POLYLINE_LINETYPE = cv::LINE_AA;
 	const int POLYLINE_LINETHICKNESS = 1;
-	const cv::Scalar POLYLINE_COLOR(200, 120, 80);
+	const cv::Scalar POLYLINE_COLOR_STD(160, 24, 160);
+	const cv::Scalar POLYLINE_COLOR_LOOP(0, 200, 0);
+	const cv::Scalar POLYLINE_COLOR_INVALID(255, 0, 0);
 
 	const int BOUNDS_LINETYPE = cv::LINE_4;
 	const int BOUNDS_LINETHICKNESS = 1;
 	const cv::Scalar BOUNDS_COLOR(255, 0, 255);
 
 	const cv::Scalar HIGHLIGHT_COLOR(255, 0, 0);
-	const cv::Scalar HIGHLIGHT_CIRCLE_COLOR(255, 200, 30);
+	const cv::Scalar HIGHLIGHT_CIRCLE_COLOR(170, 150, 30);
 	const int SEARCH_MAX_NEIGHBOURS = 10;
 	const int SEARCH_FLANN_CHECKS = 12; // default 32
 
 
+	void Connection::Invert() {
+		if (at == Connection::start)
+			at = Connection::end;
+		else at = Connection::start;
+	}
+
+	Point& Connection::StartPoint() {
+		if (at == Connection::start)
+			return polyline->Front();
+		return polyline->Back();
+	}
+
+	Point& Connection::EndPoint() {
+		if (at == Connection::start)
+			return polyline->Back();
+		return polyline->Front();
+	}
 
 	inline bool LinesIntersect(Point & p, Point & p2, Point & q, Point & q2, Point & result)
 	{
@@ -46,9 +65,9 @@ namespace VE {
 			return true;
 		}
 
-		VE::Point r = p2 - p;
-		VE::Point s = q2 - q;
-		VE::Point pq = q - p;
+		Point r = p2 - p;
+		Point s = q2 - q;
+		Point pq = q - p;
 
 		float uNumerator = (pq).cross(r);
 		float denominator = r.cross(s);
@@ -175,6 +194,30 @@ namespace VE {
 		return newPtr;
 	}
 
+	Polyline::ConStat Polyline::calculateStatus()
+	{
+		// check loop
+		if (Front() == Back())
+			return ConStat::loop;
+
+		// check if connected to nothing
+		if (ConnectFront.size() == 0 ||
+			ConnectBack.size() == 0) {
+			return ConStat::invalid;
+		}
+		// check if connected only to loop
+		if (ConnectFront.size() == 2) {
+			if (ConnectFront[0].polyline == ConnectFront[1].polyline)
+				return ConStat::invalid;
+		}
+		if (ConnectBack.size() == 2) {
+			if (ConnectBack[0].polyline == ConnectBack[1].polyline)
+				return ConStat::invalid;
+		}
+
+		return ConStat::std;
+	}
+
 	void Polyline::setPoints(std::vector<Point>& inputPoints)
 	{
 		this->points = inputPoints;
@@ -276,33 +319,63 @@ namespace VE {
 	{
 	}
 
-	void Polyline::PrependMove(Polyline & other, bool fromBackPoint)
+	inline float Mag(const Point& pt)
 	{
-		if (fromBackPoint) {
-			points.insert(points.begin(), std::make_move_iterator(other.points.begin()),
-				std::make_move_iterator(other.points.end()));
+		return std::sqrt(pt.x * pt.x + pt.y * pt.y);
+	}
+	
+	void Polyline::SimplifyNth(const float & maxDist)
+	{
+		if (points.size() <= 2)
+			return;
+
+		float max_dist2 = maxDist * maxDist;
+
+		std::vector<bool> mask(points.size());
+		for (size_t i = 0; i < points.size() - 1; )
+		{
+			Point pt = points[i];
+			mask[i] = true;
+			size_t j = i + 1;
+			Point diff = pt - points[j];
+			float dist2 = diff.x * diff.x + diff.y * diff.y;
+			while (dist2 < max_dist2 && j < points.size() - 1) {
+				j++;
+				diff = pt - points[j];
+				dist2 = diff.x * diff.x + diff.y * diff.y;
+			}
+			i = j;
 		}
-		else {
-			points.insert(points.begin(), std::make_move_iterator(other.points.rbegin()),
-				std::make_move_iterator(other.points.rend()));
+		mask.back() = true;
+
+		decltype(points) result;
+		for (int i = 0; i < mask.size(); ++i)
+		{
+			if (mask[i])
+				result.push_back(points[i]);
 		}
-		other.points.clear();
-		Cleanup();
+		points = result;
 	}
 
-	void Polyline::AppendMove(Polyline & other, bool fromBackPoint)
+	void Polyline::Smooth(const int& iterations, const float& lambda)
 	{
-		if (fromBackPoint) {
-			points.insert(points.end(), std::make_move_iterator(other.points.rbegin()),
-				std::make_move_iterator(other.points.rend()));
+		for (int i = 0; i < iterations; ++i)
+		{
+			for (int j = 1; j < points.size() - 1; j++)
+			{
+				Point& prev = points[j - 1] - points[j];
+				Point& next = points[j + 1] - points[j];
+				float nPrev = Mag(prev),
+					nNext = Mag(next);
+				float wPrev = 1 / nPrev,
+					wNext = 1 / nNext;
+
+				Point L = (wPrev * prev + wNext * next) / (wPrev + wNext);
+				points[j] += lambda * L;
+			}
 		}
-		else {
-			points.insert(points.end(), std::make_move_iterator(other.points.begin()),
-				std::make_move_iterator(other.points.end()));
-		}
-		other.points.clear();
-		Cleanup();
 	}
+
 
 	void Polyline::Draw(cv::Mat & mat)
 	{
@@ -310,19 +383,27 @@ namespace VE {
 		auto point = points.begin() + 1;
 
 		while (point != points.end()) {
-			cv::line(mat, *(point - 1), *point, POLYLINE_COLOR, POLYLINE_LINETHICKNESS, POLYLINE_LINETYPE);
+			cv::line(mat, *(point - 1), *point, POLYLINE_COLOR_STD, POLYLINE_LINETHICKNESS, POLYLINE_LINETYPE);
 			point++;
 		}
 	}
 
 	void Polyline::Draw(cv::Mat & img, Transform2D & t, bool highlight)
 	{
-		cv::Scalar color = POLYLINE_COLOR;
+		cv::Scalar color;
+		if (Status == ConStat::std)
+			color = POLYLINE_COLOR_STD;
+		else if (Status == ConStat::loop)
+			color = POLYLINE_COLOR_LOOP;
+		else if (Status == ConStat::invalid)
+			color = POLYLINE_COLOR_INVALID;
+
+
 		if (highlight)
 			color = HIGHLIGHT_COLOR;
 
 		// determine the minimum distance between two points
-		float minDist = VE::MIN_DRAWING_DISTANCE;
+		float minDist = MIN_DRAWING_DISTANCE;
 		VE::transformInv(minDist, t);
 		float minDist2 = minDist * minDist;
 
@@ -584,7 +665,7 @@ namespace VE {
 
 	void Bezier::Draw(cv::Mat & img, Transform2D & t, bool highlight)
 	{
-		cv::Scalar color = POLYLINE_COLOR;
+		cv::Scalar color = POLYLINE_COLOR_STD;
 		if (highlight)
 			color = HIGHLIGHT_COLOR;
 
@@ -612,6 +693,5 @@ namespace VE {
 	void Bezier::Closest2(const Point& pt, float & distance, Point & closest)
 	{
 	}
-
 
 }

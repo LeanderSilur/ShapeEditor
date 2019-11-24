@@ -28,27 +28,60 @@ bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<Po
 
 	return found;
 }
+using namespace VE;
 
 std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const std::vector<PolylinePointer>& polylines)
 {
 	std::vector<Connection> connections;
 	for (auto&polyline:polylines)
 	{
-		bool connected = false;
 		Connection connection;
-		connection.at = Connection::none;
+		connection.polyline = polyline;
 
-		if ((*polyline).Front() == pt)
+		if ((*polyline).Front() == pt) {
 			connection.at = Connection::start;
-		else if ((*polyline).Back() == pt)
+			connections.push_back(connection);
+		}
+		if ((*polyline).Back() == pt) {
 			connection.at = Connection::end;
-
-		if (connection.at != Connection::none) {
-			connection.polyline = polyline;
 			connections.push_back(connection);
 		}
 	}
 	return connections;
+}
+
+inline float Mag(const VE::Point& pt)
+{
+	return std::sqrt(pt.x * pt.x + pt.y * pt.y);
+}
+
+inline float Angle(const VE::Point& pt, const VE::Point& a, const VE::Point& b)
+{
+	VE::Point a_ = a - pt;
+	VE::Point b_ = b - pt;
+
+	float dot_len = (a_.x * b_.x + a_.y * b_.y) / (Mag(a_) * Mag(b_));
+	return std::acos(dot_len);
+}
+
+inline float VectorGraphic::GetConnectionAngle(const VE::Connection& conA, const VE::Connection& conB)
+{
+	VE::Point pt, a, b;
+	if (conA.at == VE::Connection::start) {
+		pt = conA.polyline->Back();
+		a = conA.polyline->Back1();
+	}
+	else {
+		pt = conA.polyline->Front();
+		a = conA.polyline->Front1();
+	}
+
+	if (conB.at == VE::Connection::start)
+		b = conB.polyline->Front1();
+	else
+		b = conB.polyline->Back1();
+
+	return Angle(pt, a, b);
 }
 
 
@@ -118,7 +151,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 
 			if (pts.size() >= 2 ) {
 				// TODO remove limit
-				if (true || i < 50){
+				if (i < 50){
 					std::shared_ptr< VE::Polyline> ptr = std::make_shared<VE::Polyline>(pts);
 					Polylines.push_back(ptr);
 				}
@@ -135,9 +168,15 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	RemoveOverlaps();
 	std::cout << " done\n";
 	std::cout << "Merging...";
-	//MergeConnected();
+	MergeConnected();
 	std::cout << " done\n";
-	//RemoveIntersections();
+
+	
+	for (PolylinePointer& p : Polylines) p->SimplifyNth(1.0);
+	for (PolylinePointer& p : Polylines) p->Smooth(10, 0.5);
+	for (PolylinePointer& p : Polylines) p->Cleanup();
+	ComputeConnections();
+
 
 	//RemoveMaxLength();
 }
@@ -212,7 +251,6 @@ void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Poi
 void VectorGraphic::RemoveOverlaps()
 {
 	size_t numberOfPolylines = Polylines.size();
-
 	for (size_t i = 0; i < numberOfPolylines; i++)
 	{
 		// Take one out.
@@ -265,7 +303,7 @@ void VectorGraphic::RemoveOverlaps()
 		}
 		else {
 			if (points.size() > 1) {
-				newPolylines.push_back(std::make_shared<VE::Polyline>(points));
+				newPolylines.push_back(std::make_shared<Polyline>(points));
 			}
 			Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		}
@@ -275,12 +313,11 @@ void VectorGraphic::RemoveOverlaps()
 
 void VectorGraphic::MergeConnected()
 {
-	decltype(Polylines) newPolylines;
-	std::vector<std::vector<VE::Point>> point_list;
-	
-	while ( Polylines.size() > 0)
+	int totalLength = Polylines.size();
+	for (int i = Polylines.size() - 1; i >= 0; )
 	{
 		PolylinePointer mainPolyline = Polylines[0];
+		std::cout << mainPolyline->debug << "\n";
 		std::vector<Connection> connections;
 
 		// create first item
@@ -288,59 +325,76 @@ void VectorGraphic::MergeConnected()
 		nextConnections.push_back(Connection());
 		nextConnections[0].at = Connection::start;
 		nextConnections[0].polyline = mainPolyline;
-
+		Point LoopConnect = mainPolyline->Front();
 
 		auto otherLines = Polylines;
-		while (nextConnections.size() == 1) {
-			// Add the con(ection) to connections.
-			Connection& con = nextConnections[0];
+		while (true) {
+			// Add the con(nection) to connections.
+			Connection con = nextConnections[0];
 			connections.push_back(con);
 			PolylinePointer polyline = con.polyline;
-			// Determine the endPoint for the next search.
-			VE::Point& searchPoint = polyline->Back();
-			if (con.at == Connection::end)
-				searchPoint = polyline->Front();
 
 			// Remove the item from the otherLines
-			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), polyline));
+			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), con.polyline));
+
+			// Determine the endPoint for the next search.
+			Point searchPoint = con.EndPoint();
+			if (searchPoint == LoopConnect) break;
 
 			// Do the search.
 			nextConnections = GetConnections(searchPoint, otherLines);
+			if (nextConnections.size() != 1) break;
+			// Compare angles.
+			Connection& next = nextConnections[0];
+			if (GetConnectionAngle(con, next) < MIN_MERGE_ANGLE) {
+				break;
+			}
 		}
 
 		// Remove the first (main) element and do the search backwards.
 		nextConnections = std::vector<Connection>();
 		nextConnections.push_back(Connection());
-		nextConnections[0].at = Connection::end;
+		nextConnections[0].at = Connection::start;
 		nextConnections[0].polyline = connections[0].polyline;
+		LoopConnect = connections.back().EndPoint();
 
 		connections.erase(connections.begin());
+
 		otherLines = Polylines;
-		while (nextConnections.size() == 1) {
-			Connection& con = nextConnections[0];
-			con.Invert();
+		while (true) {
+			Connection con = nextConnections[0];
 			connections.insert(connections.begin(), con);
 
 			PolylinePointer polyline = con.polyline;
-			// Inverse for backwards search.
-			VE::Point& searchPoint = polyline->Back();
-			if (con.at == Connection::start)
-				searchPoint = polyline->Front();
 
 			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), polyline));
 
+			// Inverse for backwards search.
+			Point searchPoint = con.StartPoint();
+			if (searchPoint == LoopConnect) break;
+
 			// Do the search.
 			nextConnections = GetConnections(searchPoint, otherLines);
+			if (nextConnections.size() != 1) break;
+
+			nextConnections[0].Invert();
+			// Compare angles.
+			Connection& next = nextConnections[0];
+			if (GetConnectionAngle(next, con) < MIN_MERGE_ANGLE) {
+				break;
+			}
 		}
 
 		// Finally, check if we have Connections and if yes
 		// remove them from the main list.
 		if (connections.size() > 1) {
 			// Contruct a new Point Sequence
-			std::vector<VE::Point> points;
+			std::vector<Point> points;
+			std::cout << mainPolyline->debug << "\n";
 			for (Connection& con: connections)
 			{
-				std::vector<VE::Point>& newPoints = con.polyline->getPoints();
+				std::cout << "           " << con.polyline->debug << "\n";
+				std::vector<Point>& newPoints = con.polyline->getPoints();
 				if (con.at == Connection::start) {
 					// this will create doubles.
 					points.insert(points.end(), newPoints.begin(), newPoints.end());
@@ -348,18 +402,36 @@ void VectorGraphic::MergeConnected()
 				else {
 					points.insert(points.end(), newPoints.rbegin(), newPoints.rend());
 				}
-				Polylines.erase(std::find(Polylines.begin(), Polylines.end(), con.polyline));
+				auto & it = std::find(Polylines.begin(), Polylines.end(), con.polyline);
+				if (it == Polylines.end()) std::cout << "not found\n";
+
+				Polylines.erase(it);
 			}
-			PolylinePointer newPolyline = std::make_shared<VE::Polyline>();
+			PolylinePointer newPolyline = std::make_shared<Polyline>();
 			newPolyline->setPoints(points);
-			newPolylines.push_back(newPolyline);
+			Polylines.push_back(newPolyline);
 		}
 		else {
-			newPolylines.push_back(Polylines[0]);
-			Polylines.erase(Polylines.begin());
+			std::cout << " - (rotating)\n";
+			std::rotate(Polylines.begin(), Polylines.begin() + 1, Polylines.end());
 		}
+		// Decrease i by as many items as we remove (connections.size())).
+		i -= connections.size();
 	}
-	Polylines = newPolylines;
+}
+
+void VectorGraphic::ComputeConnections()
+{
+	for (PolylinePointer& pl:Polylines)
+	{
+		auto otherLines = Polylines;
+		otherLines.erase(std::find(otherLines.begin(), otherLines.end(), pl));
+
+		// compute front
+		pl->ConnectFront = GetConnections(pl->Front(), otherLines);
+		pl->ConnectBack = GetConnections(pl->Back(), otherLines);
+		pl->UpdateStatus();
+	}
 }
 
 void VectorGraphic::ClosestElement(cv::Mat & img, VE::Transform2D & t, float & distance, const VE::Point & pt,

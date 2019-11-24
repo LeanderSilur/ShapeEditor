@@ -14,7 +14,6 @@ namespace VE {
 
 	const float EPSILON = FLT_EPSILON;
 	const float EPSILON_PLUS_ONE = 1 + EPSILON;
-	const float SNAPPING_DISTANCE2 = 0.0000001f;
 
 	typedef cv::Point2f Point;
 
@@ -58,6 +57,18 @@ namespace VE {
 		}
 	};
 
+	class Polyline;
+	class Connection {
+	public:
+		enum Location { start, end };
+		std::shared_ptr<Polyline> polyline;
+		Location at;
+
+		void Invert();
+		Point& StartPoint();
+		Point& EndPoint();
+	};
+
 	inline void transform(Point& pt, const Transform2D& t) {
 		pt *= t.scale;
 		pt.x += t.x; pt.y += t.y;
@@ -86,7 +97,7 @@ namespace VE {
 	};
 
 	inline bool LinesIntersect(Point & p, Point & p2, Point & q, Point & q2, Point& result);
-	
+
 
 	// VectorElement class
 	// baseclass for Polyline, Bezier
@@ -115,13 +126,19 @@ namespace VE {
 		std::shared_ptr<cv::flann::Index> flannIndex;
 		float maxLength;
 
+		// connectivity status
+		enum class ConStat{ std, loop, invalid };
+		Polyline::ConStat Status = ConStat::std;
+
 		bool RemoveDoubles();
 		void calculateKDTree();
 		void calculateBounds();
 		float distancePointLine2(const Point &u, const Point &v, const Point &p, Point&result);
 		std::shared_ptr<Polyline> splitOffAt(int &at, Point&intersection);
 
+		ConStat calculateStatus();
 	public:
+		int debug = 0;
 		void Cleanup() {
 			RemoveDoubles();
 			calculateBounds();
@@ -139,10 +156,17 @@ namespace VE {
 
 		Point& Front() { return points.front(); };
 		Point& Back() { return points.back(); };
+		Point& Front1() { return points[1]; };
+		Point& Back1() { return points[points.size() - 2]; };
 
-		void PrependMove(Polyline & other, bool fromBackPoint);
-		void AppendMove(Polyline & other, bool fromBackPoint);
+		std::vector<Connection> ConnectFront;
+		std::vector<Connection> ConnectBack;
 
+
+		void SimplifyNth(const float & maxDist = 0.5);
+		void Smooth(const int& iterations = 10, const float& lambda = 0.5);
+
+		void UpdateStatus() { Status = calculateStatus(); };
 		void Draw(cv::Mat & img) override;
 		void Draw(cv::Mat & img, Transform2D & t, bool highlight = false) override;
 		bool AnyPointInRect(cv::Rect2f & rect) override;

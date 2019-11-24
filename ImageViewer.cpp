@@ -39,6 +39,11 @@ ImageViewer::ImageViewer(QWidget * parent)
 	ShowMat();
 }
 
+void ImageViewer::setGraphic(VectorGraphic& vg)
+{
+	vectorGraphic.Polylines = vg.Polylines;
+}
+
 void ImageViewer::setMat(cv::Mat img)
 {
 	if (img.empty()) {
@@ -53,6 +58,9 @@ void ImageViewer::setMat(cv::Mat img)
 void ImageViewer::ShowMat()
 {
 	typedef cv::Point3_<uint8_t> Pixel;
+	const float visibility = 0.2;
+	Pixel baseColor(255, 255, 255);
+	baseColor *= (1 - visibility);
 
 	// Clear the mat.
 	Pixel* px_display = display.ptr<Pixel>(0, 0);
@@ -82,7 +90,7 @@ void ImageViewer::ShowMat()
 		{
 			int offsetDisp = y * display.cols + x;
 			int offsetSource = std::floor((y - ypos) * scaleFactor) * source.cols + std::floor((x - xpos) * scaleFactor);
-			*(px_display + offsetDisp) = *(px_source + offsetSource);
+			*(px_display + offsetDisp) = baseColor + *(px_source + offsetSource) * visibility;
 		}
 	}
 
@@ -171,3 +179,6 @@ void ImageViewer::wheelEvent(QWheelEvent* event) {
 	}
 }
 
+void setGraphic(VectorGraphic& vg)
+{
+}
