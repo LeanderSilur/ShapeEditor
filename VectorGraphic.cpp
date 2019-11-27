@@ -1,10 +1,12 @@
 #include "VectorGraphic.h"
+#include "Polyline.h"
+#include "Polyshape.h"
 
 #include <iostream>
 #include <sstream>
 #include <fstream>
 
-bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<PolylinePointer> Polylines,
+bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<VE::PolylinePtr> Polylines,
 	VE::Point& result, float maxDist2)
 {
 	bool found = false;
@@ -30,7 +32,7 @@ bool VectorGraphic::closestPointInRange(const VE::Point & center, std::vector<Po
 }
 using namespace VE;
 
-std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const std::vector<PolylinePointer>& polylines)
+std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const std::vector<VE::PolylinePtr>& polylines)
 {
 	std::vector<Connection> connections;
 	for (auto&polyline:polylines)
@@ -151,7 +153,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 
 			if (pts.size() >= 2 ) {
 				// TODO remove limit
-				if (i < 50){
+				if (true || i >= 6 && i <= 6){
 					std::shared_ptr< VE::Polyline> ptr = std::make_shared<VE::Polyline>(pts);
 					Polylines.push_back(ptr);
 				}
@@ -172,11 +174,30 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	std::cout << " done\n";
 
 	
-	for (PolylinePointer& p : Polylines) p->SimplifyNth(1.0);
-	for (PolylinePointer& p : Polylines) p->Smooth(10, 0.5);
-	for (PolylinePointer& p : Polylines) p->Cleanup();
+	for (VE::PolylinePtr& p : Polylines) p->Simplify(1.0);
+	for (VE::PolylinePtr& p : Polylines) p->Smooth(10, 0.5);
+	for (VE::PolylinePtr& p : Polylines) p->Cleanup();
 	ComputeConnections();
 
+	// hard coded: making a shape
+	for (auto&pl:Polylines)
+	{
+		if (pl->Status() == Polyline::LineStat::loop) {
+			std::cout << "loop " << pl->ConnectFront.size() << "; " << pl->ConnectBack.size() << "\n";
+			auto shape = std::make_shared<Polyshape>();
+			Connection con;
+			con.polyline = pl;
+			con.at = Connection::start;
+			std::vector<Connection> cons = { con };
+			shape->setConnections(cons);
+			shape->Cleanup();
+			Polyshapes.push_back(shape);
+		}
+	}
+
+	std::cout << "done with " << Polyshapes.size() << "\n";
+	//this->conn
+	//setConnections
 
 	//RemoveMaxLength();
 }
@@ -243,6 +264,7 @@ void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Poi
 		lineA[a] == lineB[b]
 		);
 
+	a--;
 	return;
 }
 
@@ -254,7 +276,7 @@ void VectorGraphic::RemoveOverlaps()
 	for (size_t i = 0; i < numberOfPolylines; i++)
 	{
 		// Take one out.
-		PolylinePointer polyline = Polylines[0];
+		VE::PolylinePtr  polyline = Polylines[0];
 		Polylines.erase(Polylines.begin());
 
 		std::vector<VE::Point>& points = polyline->getPoints();
@@ -265,7 +287,7 @@ void VectorGraphic::RemoveOverlaps()
 			// Compare to all the other polylines
 			for (auto otherLine = Polylines.begin(); otherLine != Polylines.end(); otherLine++)
 			{
-				int indexB = (*otherLine)->PointIndex(points[j]);
+				int indexB = (*otherLine)->PointIndex(points[j], 0);
 
 				// indexB is >= 0 if there a same point from an otherLine
 				if (indexB >= 0) {
@@ -316,8 +338,8 @@ void VectorGraphic::MergeConnected()
 	int totalLength = Polylines.size();
 	for (int i = Polylines.size() - 1; i >= 0; )
 	{
-		PolylinePointer mainPolyline = Polylines[0];
-		std::cout << mainPolyline->debug << "\n";
+		VE::PolylinePtr mainPolyline = Polylines[0];
+		//std::cout << mainPolyline->debug << "\n";
 		std::vector<Connection> connections;
 
 		// create first item
@@ -332,7 +354,7 @@ void VectorGraphic::MergeConnected()
 			// Add the con(nection) to connections.
 			Connection con = nextConnections[0];
 			connections.push_back(con);
-			PolylinePointer polyline = con.polyline;
+			VE::PolylinePtr  polyline = con.polyline;
 
 			// Remove the item from the otherLines
 			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), con.polyline));
@@ -365,7 +387,7 @@ void VectorGraphic::MergeConnected()
 			Connection con = nextConnections[0];
 			connections.insert(connections.begin(), con);
 
-			PolylinePointer polyline = con.polyline;
+			VE::PolylinePtr  polyline = con.polyline;
 
 			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), polyline));
 
@@ -390,10 +412,10 @@ void VectorGraphic::MergeConnected()
 		if (connections.size() > 1) {
 			// Contruct a new Point Sequence
 			std::vector<Point> points;
-			std::cout << mainPolyline->debug << "\n";
+			//std::cout << mainPolyline->debug << "\n";
 			for (Connection& con: connections)
 			{
-				std::cout << "           " << con.polyline->debug << "\n";
+				//std::cout << "           " << con.polyline->debug << "\n";
 				std::vector<Point>& newPoints = con.polyline->getPoints();
 				if (con.at == Connection::start) {
 					// this will create doubles.
@@ -407,7 +429,7 @@ void VectorGraphic::MergeConnected()
 
 				Polylines.erase(it);
 			}
-			PolylinePointer newPolyline = std::make_shared<Polyline>();
+			VE::PolylinePtr newPolyline = std::make_shared<Polyline>();
 			newPolyline->setPoints(points);
 			Polylines.push_back(newPolyline);
 		}
@@ -422,7 +444,7 @@ void VectorGraphic::MergeConnected()
 
 void VectorGraphic::ComputeConnections()
 {
-	for (PolylinePointer& pl:Polylines)
+	for (VE::PolylinePtr& pl:Polylines)
 	{
 		auto otherLines = Polylines;
 		otherLines.erase(std::find(otherLines.begin(), otherLines.end(), pl));
@@ -434,43 +456,44 @@ void VectorGraphic::ComputeConnections()
 	}
 }
 
-void VectorGraphic::ClosestElement(cv::Mat & img, VE::Transform2D & t, float & distance, const VE::Point & pt,
-	VE::Point & closest, std::shared_ptr<VE::VectorElement>& element)
+void VectorGraphic::ClosestPolyline(cv::Mat & img, VE::Transform& t, float & distance2, const VE::Point & pt,
+	VE::Point & closest, VE::PolylinePtr& element)
 {
-	cv::Rect2f bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
+
+	Bounds bounds(0, 0, img.cols, img.rows);
+	t.applyInv(bounds);
+	
 	int id = 0,
 		closest_id = 0;
-	for (auto el = Polylines.begin(); el != Polylines.end(); el++) {
-		VE::VectorElement * ve = el->get();
-		if (ve->AnyPointInRect(bounds)) {
-			float previous = distance;
-			el->get()->Closest2(pt, distance, closest);
-			if (previous != distance) {
-				element = *el;
+	for (auto pl = Polylines.begin(); pl != Polylines.end(); pl++) {
+		// Check for visibility first.
+		if ((*pl)->AnyPointInRect(bounds)) {
+			float previous = distance2;
+			(*pl)->Closest2(pt, distance2, closest);
+			if (previous != distance2) {
+				element = *pl;
 				closest_id = id;
 			}
 		}
 		id++;
 	}
-	//std::cout << "closest " << closest_id << ", " << closest << "\n";
 }
 
-void VectorGraphic::Draw(cv::Mat & img)
+void VectorGraphic::Draw(cv::Mat& img, VE::Transform& t)
 {
-	for (auto el = Polylines.begin(); el != Polylines.end(); el++){
-		VE::VectorElement * ve = el->get();
-		el->get()->Draw(img);
+	Bounds bounds(0, 0, img.cols, img.rows);
+	t.applyInv(bounds);
+
+
+	for (auto el = Polyshapes.begin(); el != Polyshapes.end(); el++) {
+		if ((*el)->AnyPointInRect(bounds)) {
+			(*el)->Draw(img, t);
+		}
 	}
-}
-
-void VectorGraphic::Draw(cv::Mat & img, VE::Transform2D& t)
-{
-	cv::Rect2f bounds(-t.x / t.scale, -t.y / t.scale, img.cols / t.scale, img.rows / t.scale);
 
 	for (auto el = Polylines.begin(); el != Polylines.end(); el++) {
-		VE::VectorElement * ve = el->get();
-		if (ve->AnyPointInRect(bounds)) {
-			el->get()->Draw(img, t);
+		if ((*el)->AnyPointInRect(bounds)) {
+			(*el)->Draw(img, t);
 		}
 	}
 }

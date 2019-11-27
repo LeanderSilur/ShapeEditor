@@ -1,9 +1,8 @@
 #pragma once
 
 #include <vector>
-#include "VectorElements.h"
+#include "VectorElement.h"
 
-typedef std::shared_ptr<VE::Polyline> PolylinePointer;
 class VectorGraphic {
 private:
 	// Used in SnapEndpoints(). The distance2 of an endpoint to a
@@ -16,17 +15,18 @@ private:
 
 	// returns the closest point on the polyline
 	bool closestPointInRange(const VE::Point & center,
-		std::vector<PolylinePointer> Polylines,
+		std::vector<VE::PolylinePtr> Polylines,
 		VE::Point& result, float maxDist2);
 	
-	std::vector<VE::Connection> GetConnections(const VE::Point& pt, const std::vector<PolylinePointer>& polylines);
+	std::vector<VE::Connection> GetConnections(const VE::Point& pt, const std::vector<VE::PolylinePtr>& polylines);
 	inline float GetConnectionAngle(const VE::Connection& conA, const VE::Connection& conB);
 public:
 
 	VectorGraphic() {};
 	
 
-	std::vector<PolylinePointer> Polylines;
+	std::vector<VE::PolylinePtr> Polylines;
+	std::vector<VE::PolyshapePtr> Polyshapes;
 
 	void LoadPolylines(std::string path);
 
@@ -36,9 +36,8 @@ public:
 	void ComputeConnections();
 
 	// bloated complicated method, used for the imageviewer
-	void ClosestElement(cv::Mat& img, VE::Transform2D& t, float& distance, const VE::Point& pt,
-		VE::Point& closest, std::shared_ptr<VE::VectorElement>& element);
+	void ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
+		VE::Point& closest, VE::PolylinePtr& element);
 
-	void Draw(cv::Mat & img);
-	void Draw(cv::Mat & img, VE::Transform2D & t);
+	void Draw(cv::Mat & img, VE::Transform& t);
 };
