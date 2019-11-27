@@ -49,6 +49,9 @@ std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const
 			connections.push_back(connection);
 		}
 	}
+	if (connections.size() == 2 &&
+		connections[0].polyline == connections[1].polyline)
+		connections.clear();
 	return connections;
 }
 
@@ -178,7 +181,8 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	for (VE::PolylinePtr& p : Polylines) p->Smooth(10, 0.5);
 	for (VE::PolylinePtr& p : Polylines) p->Cleanup();
 	ComputeConnectionStatus();
-	CalcShapes();
+	RemoveUnusedConnections();
+	//CalcShapes();
 
 	std::cout << "done with " << Polyshapes.size() << "\n";
 	//this->conn
@@ -319,7 +323,7 @@ void VectorGraphic::RemoveOverlaps()
 		}
 		else {
 			if (points.size() > 1) {
-				newPolylines.push_back(std::make_shared<Polyline>(points));
+				newPolylines.push_back(std::make_shared<VE::Polyline>(points));
 			}
 			Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		}
@@ -327,14 +331,23 @@ void VectorGraphic::RemoveOverlaps()
 	}
 }
 
-
 void VectorGraphic::MergeConnected()
 {
+	float mergeAngle = CV_PI;
+	if (true)
+		mergeAngle = MIN_MERGE_ANGLE;
+
+
 	for (int i = Polylines.size() - 1; i >= 0; )
 	{
 		VE::PolylinePtr mainPolyline = Polylines[0];
 		std::vector<Connection> connections;
 
+		if (mainPolyline->getPoints().size() == 65 &&
+			Polylines.size() == 13)
+		{
+			int a = 1;
+		}
 		// create first item
 		std::vector<Connection> nextConnections;
 		nextConnections.push_back(Connection());
@@ -361,7 +374,7 @@ void VectorGraphic::MergeConnected()
 			if (nextConnections.size() != 1) break;
 			// Compare angles.
 			Connection& next = nextConnections[0];
-			if (GetConnectionAngle(con, next) < MIN_MERGE_ANGLE) {
+			if (GetConnectionAngle(con, next) < mergeAngle) {
 				break;
 			}
 		}
@@ -395,7 +408,7 @@ void VectorGraphic::MergeConnected()
 			nextConnections[0].Invert();
 			// Compare angles.
 			Connection& next = nextConnections[0];
-			if (GetConnectionAngle(next, con) < MIN_MERGE_ANGLE) {
+			if (GetConnectionAngle(next, con) < mergeAngle){
 				break;
 			}
 		}
@@ -422,7 +435,7 @@ void VectorGraphic::MergeConnected()
 
 				Polylines.erase(it);
 			}
-			VE::PolylinePtr newPolyline = std::make_shared<Polyline>();
+			VE::PolylinePtr newPolyline = std::make_shared<VE::Polyline>();
 			newPolyline->setPoints(points);
 			Polylines.push_back(newPolyline);
 		}
@@ -445,6 +458,26 @@ void VectorGraphic::ComputeConnectionStatus()
 		pl->ConnectFront = GetConnections(pl->Front(), otherLines);
 		pl->ConnectBack = GetConnections(pl->Back(), otherLines);
 		pl->UpdateStatus();
+	}
+}
+
+void VectorGraphic::RemoveUnusedConnections()
+{
+	int amount = 0;
+	while (amount != Polylines.size()) {
+		amount = Polylines.size();
+		
+		decltype(Polylines) validLines;
+		for (VE::PolylinePtr& pl : Polylines)
+		{
+			if (pl->Status() != Polyline::LineStat::invalid)
+				validLines.push_back(pl);
+		}
+
+		Polylines = std::move(validLines);
+		MergeConnected();
+		ComputeConnectionStatus();
+		std::cout << Polylines.size() << ", \n";
 	}
 }
 

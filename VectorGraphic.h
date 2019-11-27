@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "VectorElement.h"
+#include <moc_ImageViewer.cpp>
 
 class VectorGraphic {
 private:
@@ -33,7 +34,8 @@ public:
 	void SnapEndpoints();
 	void RemoveOverlaps();
 	void MergeConnected();
-	void ComputeConnections();
+	void ComputeConnectionStatus();
+	void RemoveUnusedConnections();
 	void CalcShapes();
 
 	// bloated complicated method, used for the imageviewer
