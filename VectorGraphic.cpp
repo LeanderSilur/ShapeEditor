@@ -153,7 +153,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 
 			if (pts.size() >= 2 ) {
 				// TODO remove limit
-				if (true || i >= 6 && i <= 6){
+				if (true ||i >= 0 && i <= 1){
 					std::shared_ptr< VE::Polyline> ptr = std::make_shared<VE::Polyline>(pts);
 					Polylines.push_back(ptr);
 				}
@@ -174,26 +174,11 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	std::cout << " done\n";
 
 	
-	for (VE::PolylinePtr& p : Polylines) p->Simplify(1.0);
+	for (VE::PolylinePtr& p : Polylines) p->Simplify(1.2);
 	for (VE::PolylinePtr& p : Polylines) p->Smooth(10, 0.5);
 	for (VE::PolylinePtr& p : Polylines) p->Cleanup();
-	ComputeConnections();
-
-	// hard coded: making a shape
-	for (auto&pl:Polylines)
-	{
-		if (pl->Status() == Polyline::LineStat::loop) {
-			std::cout << "loop " << pl->ConnectFront.size() << "; " << pl->ConnectBack.size() << "\n";
-			auto shape = std::make_shared<Polyshape>();
-			Connection con;
-			con.polyline = pl;
-			con.at = Connection::start;
-			std::vector<Connection> cons = { con };
-			shape->setConnections(cons);
-			shape->Cleanup();
-			Polyshapes.push_back(shape);
-		}
-	}
+	ComputeConnectionStatus();
+	CalcShapes();
 
 	std::cout << "done with " << Polyshapes.size() << "\n";
 	//this->conn
@@ -237,6 +222,7 @@ void VectorGraphic::SnapEndpoints()
 
 // trace in direction to determine overlap
 // starting at lineA[a] == lineB[b]
+// "end" is the last point which is the same for A and B
 void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Point>& lineB, int& a, int b) {
 	int traceDir;
 	int exitB;
@@ -244,26 +230,32 @@ void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Poi
 	// trace B forwards (else backwards)
 	if (lineB.size() != b + 1 && lineA[a + 1] == lineB[b + 1]) {
 		traceDir = 1;
-		exitB = lineB.size() - 1;
+		exitB = lineB.size();
 	}
 	else if (-1 != b - 1 && lineA[a + 1] == lineB[b - 1]) {
 		traceDir = -1;
-		exitB = 0;
+		exitB = -1;
 	}
 	else {
 		// only initial point is the same
 		return;
 	}
 
-	do {
+	while (true) {
 		a++;
 		b += traceDir;
-	} while (
-		a != lineA.size() &&
-		b != exitB &&
-		lineA[a] == lineB[b]
-		);
 
+		if (a == lineA.size()) {
+			break;
+		}
+		if (b == exitB) {
+			break;
+		}
+		if (lineA[a] != lineB[b]) {
+			break;
+		}
+	}
+	// decrement a to get to the last working point
 	a--;
 	return;
 }
@@ -300,12 +292,14 @@ void VectorGraphic::RemoveOverlaps()
 					}
 
 					int end = j;
-					// Track to the "end" of the overlap and remove the points before the end.
+					// Trace to the "end" of the overlap and remove the points before the end.
 					TraceOverlap(points, (*otherLine)->getPoints(), end, indexB);
-					if (end > 1) {
+					if (end > 0) {
 						//std::cout << "Removing overlap: " << j << " - " << end << "\n";
+						//std::cout << "                  " << points[j] << ", " <<points[end] << "\n";
 
 						// Removing from the middle.
+						// This works untill points.size() - 1
 						points.erase(points.begin(), points.begin() + end);
 						j = -1;
 						// break to the start of looping through all points
@@ -333,13 +327,12 @@ void VectorGraphic::RemoveOverlaps()
 	}
 }
 
+
 void VectorGraphic::MergeConnected()
 {
-	int totalLength = Polylines.size();
 	for (int i = Polylines.size() - 1; i >= 0; )
 	{
 		VE::PolylinePtr mainPolyline = Polylines[0];
-		//std::cout << mainPolyline->debug << "\n";
 		std::vector<Connection> connections;
 
 		// create first item
@@ -434,7 +427,6 @@ void VectorGraphic::MergeConnected()
 			Polylines.push_back(newPolyline);
 		}
 		else {
-			std::cout << " - (rotating)\n";
 			std::rotate(Polylines.begin(), Polylines.begin() + 1, Polylines.end());
 		}
 		// Decrease i by as many items as we remove (connections.size())).
@@ -442,7 +434,7 @@ void VectorGraphic::MergeConnected()
 	}
 }
 
-void VectorGraphic::ComputeConnections()
+void VectorGraphic::ComputeConnectionStatus()
 {
 	for (VE::PolylinePtr& pl:Polylines)
 	{
@@ -454,6 +446,27 @@ void VectorGraphic::ComputeConnections()
 		pl->ConnectBack = GetConnections(pl->Back(), otherLines);
 		pl->UpdateStatus();
 	}
+}
+
+void VectorGraphic::CalcShapes()
+{
+	Polyshapes.clear();
+	// hard coded: making a shape
+	for (auto& pl : Polylines)
+	{
+		if (pl->Status() == Polyline::LineStat::loop) {
+			std::cout << "loop " << pl->ConnectFront.size() << "; " << pl->ConnectBack.size() << "\n";
+			auto shape = std::make_shared<Polyshape>();
+			Connection con;
+			con.polyline = pl;
+			con.at = Connection::start;
+			std::vector<Connection> cons = { con };
+			shape->setConnections(cons);
+			shape->Cleanup();
+			Polyshapes.push_back(shape);
+		}
+	}
+	return;
 }
 
 void VectorGraphic::ClosestPolyline(cv::Mat & img, VE::Transform& t, float & distance2, const VE::Point & pt,
@@ -477,6 +490,7 @@ void VectorGraphic::ClosestPolyline(cv::Mat & img, VE::Transform& t, float & dis
 		}
 		id++;
 	}
+	std::cout << closest << "\n";
 }
 
 void VectorGraphic::Draw(cv::Mat& img, VE::Transform& t)

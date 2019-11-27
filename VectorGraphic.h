@@ -34,6 +34,7 @@ public:
 	void RemoveOverlaps();
 	void MergeConnected();
 	void ComputeConnections();
+	void CalcShapes();
 
 	// bloated complicated method, used for the imageviewer
 	void ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
