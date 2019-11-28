@@ -23,9 +23,6 @@ private:
 		QPoint startPos;
 	};
 
-	//QPoint position;
-	//float scaleFactor = 2;
-	// If transform.scale is 2, then the image is shown twice as large.
 	VE::Transform transform;
 
 

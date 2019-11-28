@@ -173,7 +173,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	RemoveOverlaps();
 	std::cout << " done\n";
 	std::cout << "Merging...";
-	MergeConnected();
+	MergeConnected(true);
 	std::cout << " done\n";
 
 	
@@ -331,10 +331,10 @@ void VectorGraphic::RemoveOverlaps()
 	}
 }
 
-void VectorGraphic::MergeConnected()
+void VectorGraphic::MergeConnected(bool limitAngle)
 {
-	float mergeAngle = CV_PI;
-	if (true)
+	float mergeAngle =0;
+	if (limitAngle)
 		mergeAngle = MIN_MERGE_ANGLE;
 
 
@@ -475,7 +475,7 @@ void VectorGraphic::RemoveUnusedConnections()
 		}
 
 		Polylines = std::move(validLines);
-		MergeConnected();
+		MergeConnected(false);
 		ComputeConnectionStatus();
 		std::cout << Polylines.size() << ", \n";
 	}
