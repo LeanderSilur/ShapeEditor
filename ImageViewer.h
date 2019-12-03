@@ -4,6 +4,7 @@
 #include <QtWidgets>
 
 #include "VectorGraphic.h"
+#include "ui_ShapeEditor.h"
 
 class ImageViewer : public QLabel
 {
@@ -17,14 +18,17 @@ public:
 	void setGraphic(VectorGraphic& vg);
 	void setMat(cv::Mat mat);
 
+	void ConnectUi(Ui_ShapeEditor& se);
+
 private:
-	typedef struct MouseAction {
-		bool active = false;
-		QPoint startPos;
+	enum class InteractionMode {
+		Examine,
+		Split,
+		Connect,
+		Delete
 	};
 
 	VE::Transform transform;
-
 
 	VectorGraphic vectorGraphic;
 
@@ -34,21 +38,34 @@ private:
 	void FrameAll();
 	void FrameTrue();
 
-	void mousePressEvent(QMouseEvent * event);
-	void mouseMoveEvent(QMouseEvent * event);
-	void mouseReleaseEvent(QMouseEvent * event);
-	void wheelEvent(QWheelEvent* event);
+	QPoint MousePosition(); 
 
-	MouseAction grab;
-	MouseAction pointPreview;
-	MouseAction lineConnect;
+	QPoint mouseDown;
+	InteractionMode mode = InteractionMode::Examine;
 
 	cv::Mat source;
 	cv::Mat display;
 
 
-
 protected:
 	void keyPressEvent(QKeyEvent* event);
+	void mousePressEvent(QMouseEvent * event);
+	void mouseMoveEvent(QMouseEvent * event);
+	void mouseReleaseEvent(QMouseEvent * event);
+	void wheelEvent(QWheelEvent* event);
+	void resizeEvent(QResizeEvent* event);
+
+public slots:
+	void SnapEndpoints(bool checked);
+	void RemoveOverlaps(bool checked);
+	void MergeConnected(bool checked);
+	void Simplify(bool checked);
+	void Smooth(bool checked);
+
+	void BasicCleanup(bool checked);
+
+	void ComputeConnectionStatus(bool checked);
+	void RemoveUnusedConnections(bool checked);
+	void CalcShapes(bool checked);
 	
 };

@@ -58,11 +58,17 @@ namespace VE {
 		cv::Scalar color(200, 200, 170);
 
 
-		float eps = VE::MIN_DRAWING_AREA;
-		eps *= t.scale * t.scale; // cause squared 
+		// determine the minimum distance between two points
+		float minDist = MIN_DRAWING_DISTANCE;
+		t.applyInv(minDist);
+		float minDist2 = minDist * minDist;
 
+
+		// Create a copy, then simplify it according to the Transforms mindist2.
 		auto drawPoints = points;
-		for (Point& pt : drawPoints)
+		SimplifyNth(drawPoints, minDist2);
+
+		for (auto& pt : drawPoints)
 			t.apply(pt);
 
 		std::vector<cv::Point2i> tmp;
@@ -74,9 +80,10 @@ namespace VE {
 
 		//Mat a = (Mat_<int>(4, 2) << 0, 1, 10, 11, 20, 21, 30, 31);
 
-		std::cout << " >>>" << numberOfPoints << "\n";
 
 		cv::fillPoly(img, elementPoints, &numberOfPoints, 1, color, cv::LINE_AA);
+
+		drawBoundingBox(img, t);
 
 	}
 

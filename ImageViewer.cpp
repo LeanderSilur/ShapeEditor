@@ -9,13 +9,19 @@
 #include <iostream>
 
 
-ImageViewer::ImageViewer(QWidget * parent)
+ImageViewer::ImageViewer(QWidget* parent)
+	: QLabel(nullptr)
 {
-	if (parent == nullptr)
-		this->setFixedSize(720, 720);
+	parent->layout()->addWidget(this);
+
+	setFocusPolicy(Qt::StrongFocus);
+	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+	setMinimumSize(200, 200);
+	setMaximumSize(720, 300);
 
 	setMouseTracking(true);
-
+	
+	// width(), height()
 	display = cv::Mat(cv::Size(width(), height()), CV_8UC3);
 
 	 //todo resizing
@@ -37,10 +43,10 @@ ImageViewer::ImageViewer(QWidget * parent)
 			rgb.green += ((x + y) % 2) * 20;
 			rgb.blue = rgb.red = rgb.green;
 		}
-	setMat(s);
 	transform.scale = 1;
 	transform.x = 0;
 	transform.y = 0;
+	setMat(s);
 	ShowMat();
 }
 
@@ -59,6 +65,34 @@ void ImageViewer::setMat(cv::Mat img)
 	cv::cvtColor(img, img, CV_BGR2RGB);
 	this->source = img;
 
+}
+
+void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
+{
+	auto cl = &QPushButton::clicked;
+
+	QObject::connect(se.bsnap,
+		cl, this, &ImageViewer::SnapEndpoints);
+	QObject::connect(se.boverlap,
+		cl, this, &ImageViewer::RemoveOverlaps);
+	QObject::connect(se.bmergeConnections,
+		cl, this, &ImageViewer::MergeConnected);
+	QObject::connect(se.bsimplify,
+		cl, this, &ImageViewer::Simplify);
+	QObject::connect(se.bsmooth,
+		cl, this, &ImageViewer::Smooth);
+	QObject::connect(se.bbasicCleanup,
+		cl, this, &ImageViewer::BasicCleanup);
+
+
+	QObject::connect(se.bupdateStat,
+		cl, this, &ImageViewer::ComputeConnectionStatus);
+	QObject::connect(se.bremoveUnused,
+		cl, this, &ImageViewer::RemoveUnusedConnections);
+	QObject::connect(se.bcalcShapes,
+		cl, this, &ImageViewer::CalcShapes);
+
+	
 }
 
 void ImageViewer::ShowMat()
@@ -103,11 +137,12 @@ void ImageViewer::ShowMat()
 	vectorGraphic.Draw(display, transform);
 
 
-	if (pointPreview.active) {
+	if (mode == InteractionMode::Examine) {
 		// highlight closest
 		VE::Point result;
 		VE::PolylinePtr element;
-		VE::Point mousePos(pointPreview.startPos.x(),pointPreview.startPos.y());
+		QPoint p = MousePosition();
+		VE::Point mousePos(p.x(), p.y());
 		transform.applyInv(mousePos);
 		
 		float distance = HIGHLIGHT_DISTANCE / transform.scale;
@@ -152,7 +187,8 @@ void ImageViewer::FrameSelected()
 	// highlight closest
 	VE::Point result;
 	VE::PolylinePtr element;
-	VE::Point mousePos(pointPreview.startPos.x(), pointPreview.startPos.y());
+	auto qmouse = MousePosition();
+	VE::Point mousePos(qmouse.x(), qmouse.y());
 	transform.applyInv(mousePos);
 
 	float distance = HIGHLIGHT_DISTANCE / transform.scale;
@@ -183,33 +219,32 @@ void ImageViewer::FrameTrue()
 	transform.y = 0;
 }
 
+QPoint ImageViewer::MousePosition()
+{
+	return mapFromGlobal(QCursor::pos());
+}
+
 void ImageViewer::mousePressEvent(QMouseEvent * event)
 {
-	if (event->button() == Qt::MiddleButton && !lineConnect.active) {
-		grab.active = true;
-		grab.startPos = event->pos();
+	// TODO differentiate this
+	if (event->button() == Qt::MiddleButton) {
+		mouseDown = event->pos();
 	}
 
-	if (event->button() == Qt::LeftButton && !grab.active) {
-		lineConnect.active = true;
-		lineConnect.startPos = event->pos();
+	if (event->button() == Qt::LeftButton) {
+		mouseDown = event->pos();
 	}
 }
 
 void ImageViewer::mouseMoveEvent(QMouseEvent *event) {
-	if (grab.active) {
-		transform.x += event->pos().x() - grab.startPos.x();
-		transform.y += event->pos().y() - grab.startPos.y();
-		grab.startPos = event->pos();
+	if (event->button() == Qt::MiddleButton) {
+		transform.x += event->pos().x() - mouseDown.x();
+		transform.y += event->pos().y() - mouseDown.y();
+		mouseDown = event->pos();
 	}
 	
-	if (event->buttons() == 0) {
-		pointPreview.active = true;
-		pointPreview.startPos = event->pos();
-	}
-	else {
-		pointPreview.active = false;
-	}
+
+	mouseDown = event->pos();
 	ShowMat();
 }
 
@@ -232,9 +267,13 @@ void ImageViewer::wheelEvent(QWheelEvent* event) {
 		ShowMat();
 	}
 }
-
+void ImageViewer::resizeEvent(QResizeEvent* event)
+{
+	display = cv::Mat(cv::Size(width(), height()), CV_8UC3);
+}
 void ImageViewer::keyPressEvent(QKeyEvent* event)
 {
+	std::cout << "keydown \n";
 	if (event->key() == Qt::Key_F) {
 		FrameSelected();
 	}
@@ -244,4 +283,43 @@ void ImageViewer::keyPressEvent(QKeyEvent* event)
 	if (event->key() == Qt::Key_Home) {
 		FrameTrue();
 	}
+}
+
+
+void ImageViewer::SnapEndpoints(bool checked)
+{
+	vectorGraphic.SnapEndpoints();
+	ShowMat();
+}
+
+void ImageViewer::RemoveOverlaps(bool checked)
+{
+}
+
+void ImageViewer::MergeConnected(bool checked)
+{
+}
+
+void ImageViewer::Simplify(bool checked)
+{
+}
+
+void ImageViewer::Smooth(bool checked)
+{
+}
+
+void ImageViewer::BasicCleanup(bool checked)
+{
+}
+
+void ImageViewer::ComputeConnectionStatus(bool checked)
+{
+}
+
+void ImageViewer::RemoveUnusedConnections(bool checked)
+{
+}
+
+void ImageViewer::CalcShapes(bool checked)
+{
 }

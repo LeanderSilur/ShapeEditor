@@ -166,6 +166,7 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 		}
 		myfile.close();
 	}
+	return;
 	std::cout << "Snapping...";
 	SnapEndpoints();
 	std::cout << " done\n";
@@ -180,9 +181,10 @@ void VectorGraphic::LoadPolylines(std::string svgPath)
 	for (VE::PolylinePtr& p : Polylines) p->Simplify(1.2);
 	for (VE::PolylinePtr& p : Polylines) p->Smooth(10, 0.5);
 	for (VE::PolylinePtr& p : Polylines) p->Cleanup();
+
 	ComputeConnectionStatus();
 	RemoveUnusedConnections();
-	//CalcShapes();
+	CalcShapes();
 
 	std::cout << "done with " << Polyshapes.size() << "\n";
 	//this->conn
@@ -535,6 +537,7 @@ void VectorGraphic::Draw(cv::Mat& img, VE::Transform& t)
 	for (auto el = Polyshapes.begin(); el != Polyshapes.end(); el++) {
 		if ((*el)->AnyPointInRect(bounds)) {
 			(*el)->Draw(img, t);
+			return;
 		}
 	}
 

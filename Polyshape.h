@@ -7,7 +7,6 @@ namespace VE {
 	class Polyshape : public VectorElement {
 	protected:
 		std::vector<Connection> connections;
-		Bounds bounds;
 		bool valid;
 		std::vector<Point> points;
 

@@ -23,7 +23,7 @@ namespace VE {
 			x1 = std::max(pt->x, x1);
 			y1 = std::max(pt->y, y1);
 		}
-		this->bounds = Bounds(x0, y0, x1, y1);
+		bounds = Bounds(x0, y0, x1, y1);
 	}
 
 	void VectorElement::drawBoundingBox(cv::Mat& img, Transform& t)
