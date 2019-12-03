@@ -78,19 +78,15 @@ namespace VE {
 		const cv::Point2i* elementPoints[1] = { &tmp[0] };
 		int numberOfPoints = (int)tmp.size();
 
-		//Mat a = (Mat_<int>(4, 2) << 0, 1, 10, 11, 20, 21, 30, 31);
-
 
 		cv::fillPoly(img, elementPoints, &numberOfPoints, 1, color, cv::LINE_AA);
-
 		drawBoundingBox(img, t);
-
 	}
 
 	bool Polyshape::AnyPointInRect(Bounds& other)
 	{
 		return bounds.Overlap(other);
-	}
+	}	
 
 	Bounds& Polyshape::getBounds()
 	{

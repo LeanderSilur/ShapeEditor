@@ -56,7 +56,8 @@ namespace VE {
 		void UpdateStatus() { status = getStatus(); };
 		LineStat Status() { return status; };
 
-		void Draw(cv::Mat& img, Transform& t, bool highlight = false);
+		void Draw(cv::Mat& img, Transform& t,
+			cv::Scalar* pcolor = nullptr, bool circles = false);
 
 		bool AnyPointInRect(VE::Bounds& bounds);
 		float Distance2(Point& pt);

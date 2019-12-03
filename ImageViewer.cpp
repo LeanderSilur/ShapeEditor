@@ -1,12 +1,15 @@
 
 #include "imageviewer.h"
+
 #include "Polyline.h"
 #include "Polyshape.h"
+#include "InputDialog.h"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
+
 
 
 ImageViewer::ImageViewer(QWidget* parent)
@@ -17,7 +20,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 	setFocusPolicy(Qt::StrongFocus);
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	setMinimumSize(200, 200);
-	setMaximumSize(720, 300);
+	setMaximumSize(560, 720);
 
 	setMouseTracking(true);
 	
@@ -47,7 +50,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 	transform.x = 0;
 	transform.y = 0;
 	setMat(s);
-	ShowMat();
+	//ShowMat();
 }
 
 void ImageViewer::setGraphic(VectorGraphic& vg)
@@ -92,7 +95,65 @@ void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
 	QObject::connect(se.bcalcShapes,
 		cl, this, &ImageViewer::CalcShapes);
 
-	
+	QObject::connect(se.bi_examine,
+		cl, this, &ImageViewer::ctExamine);
+	QObject::connect(se.bi_split,
+		cl, this, &ImageViewer::ctSplit);
+	QObject::connect(se.bi_connect,
+		cl, this, &ImageViewer::ctConnect);
+	QObject::connect(se.bi_delete,
+		cl, this, &ImageViewer::ctDelete);
+	interactionButtons[InteractionMode::Examine] = se.bi_examine;
+	interactionButtons[InteractionMode::Split] = se.bi_split;
+	interactionButtons[InteractionMode::Connect] = se.bi_connect;
+	interactionButtons[InteractionMode::Delete] = se.bi_delete;
+
+
+}
+
+bool ImageViewer::ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element)
+{
+	// Get the closest element and point to the mouse.
+	element = nullptr;
+	VE::Point mousePos = VEMousePosition();
+	transform.applyInv(mousePos);
+
+	float maxDist = HIGHLIGHT_DISTANCE / transform.scale;
+	float maxDist2 = maxDist * maxDist;
+	float distance2 = maxDist2;
+
+	vectorGraphic.ClosestPolyline(
+		display, transform, distance2,
+		mousePos, closest, element);
+
+	return element != nullptr;
+}
+
+void ImageViewer::DrawHighlight()
+{
+	VE::Point closestPt;
+	VE::PolylinePtr element;
+
+	if (ClosestLinePoint(closestPt, element)) {
+		element->Draw(display, transform, true, false);
+	}
+}
+
+void ImageViewer::DrawHighlightPoints()
+{
+	VE::Point closestPt;
+	VE::PolylinePtr element;
+
+	if (ClosestLinePoint(closestPt, element)) {
+		transform.apply(closestPt);
+
+		cv::circle(display, closestPt, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
+		element->Draw(display, transform, true, true);
+	}
+}
+
+void ImageViewer::DrawConnect()
+{
 }
 
 void ImageViewer::ShowMat()
@@ -136,38 +197,13 @@ void ImageViewer::ShowMat()
 	// Draw the vector elements.
 	vectorGraphic.Draw(display, transform);
 
+	std::cout << (int)mode << " mode\n";
 
-	if (mode == InteractionMode::Examine) {
-		// highlight closest
-		VE::Point result;
-		VE::PolylinePtr element;
-		QPoint p = MousePosition();
-		VE::Point mousePos(p.x(), p.y());
-		transform.applyInv(mousePos);
-		
-		float distance = HIGHLIGHT_DISTANCE / transform.scale;
-		vectorGraphic.ClosestPolyline(
-			display, transform, distance,
-			mousePos, result, element);
-		if (element != nullptr) {
-			transform.apply(result);
-			if (distance < VE::FMAX) {
-				cv::circle(display, result, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
-				element->Draw(display, transform, true);
-			}
+	if (interactionDraw != nullptr)
+		(this->*interactionDraw)();
 
-			auto it = std::find(vectorGraphic.Polylines.begin(), vectorGraphic.Polylines.end(), element);
-			int elIndex = std::distance(vectorGraphic.Polylines.begin(), it);
-			VE::Point res(result);
-			transform.applyInv(res);
-
-		}
-		
-	}
-
-
+	// Finally, put the cv::Mat (image) on the QLabel.
 	QImage qimg(display.data, display.cols, display.rows, display.step, QImage::Format_RGB888);
-
 	this->setPixmap(QPixmap::fromImage(qimg));
 }
 
@@ -187,7 +223,7 @@ void ImageViewer::FrameSelected()
 	// highlight closest
 	VE::Point result;
 	VE::PolylinePtr element;
-	auto qmouse = MousePosition();
+	auto qmouse = QMousePosition();
 	VE::Point mousePos(qmouse.x(), qmouse.y());
 	transform.applyInv(mousePos);
 
@@ -219,30 +255,45 @@ void ImageViewer::FrameTrue()
 	transform.y = 0;
 }
 
-QPoint ImageViewer::MousePosition()
+QPoint ImageViewer::QMousePosition()
 {
 	return mapFromGlobal(QCursor::pos());
+}
+
+VE::Point ImageViewer::VEMousePosition()
+{
+	QPoint p = mapFromGlobal(QCursor::pos());
+	return VE::Point(p.x(), p.y());
+}
+
+bool ImageViewer::CtrlPressed()
+{
+	return QGuiApplication::keyboardModifiers() == Qt::ControlModifier;
+}
+
+bool ImageViewer::ShiftPressed()
+{
+	return QGuiApplication::keyboardModifiers() == Qt::ShiftModifier;
 }
 
 void ImageViewer::mousePressEvent(QMouseEvent * event)
 {
 	// TODO differentiate this
+	mouseDown = event->pos();
+
 	if (event->button() == Qt::MiddleButton) {
-		mouseDown = event->pos();
 	}
 
 	if (event->button() == Qt::LeftButton) {
-		mouseDown = event->pos();
 	}
 }
 
 void ImageViewer::mouseMoveEvent(QMouseEvent *event) {
-	if (event->button() == Qt::MiddleButton) {
+	if (event->buttons() == Qt::MiddleButton) {
 		transform.x += event->pos().x() - mouseDown.x();
 		transform.y += event->pos().y() - mouseDown.y();
 		mouseDown = event->pos();
 	}
-	
 
 	mouseDown = event->pos();
 	ShowMat();
@@ -250,22 +301,25 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event) {
 
 void ImageViewer::mouseReleaseEvent(QMouseEvent * event)
 {
-	if (event->button() == Qt::MiddleButton)
-		grab.active = false;
-}
-void ImageViewer::wheelEvent(QWheelEvent* event) {
-	if (grab.active == false) {
-		// Do a scroll.
-		float scrollFactor = 1.2;
-		if (static_cast<float>(event->angleDelta().y()) > 0)
-			scrollFactor = 1 / scrollFactor;
+	if (event->button() == Qt::MiddleButton) {
 
-		transform.scale /= scrollFactor;
-		transform.x = event->pos().x() + (transform.x - event->pos().x()) / scrollFactor;
-		transform.y = event->pos().y() + (transform.y - event->pos().y()) / scrollFactor;
-
-		ShowMat();
 	}
+	else if (event->button() == Qt::LeftButton) {
+
+	}
+}
+
+void ImageViewer::wheelEvent(QWheelEvent* event) {
+	// Do a scroll.
+	float scrollFactor = 1.2;
+	if (static_cast<float>(event->angleDelta().y()) > 0)
+		scrollFactor = 1 / scrollFactor;
+
+	transform.scale /= scrollFactor;
+	transform.x = event->pos().x() + (transform.x - event->pos().x()) / scrollFactor;
+	transform.y = event->pos().y() + (transform.y - event->pos().y()) / scrollFactor;
+
+	ShowMat();
 }
 void ImageViewer::resizeEvent(QResizeEvent* event)
 {
@@ -273,16 +327,27 @@ void ImageViewer::resizeEvent(QResizeEvent* event)
 }
 void ImageViewer::keyPressEvent(QKeyEvent* event)
 {
-	std::cout << "keydown \n";
-	if (event->key() == Qt::Key_F) {
-		FrameSelected();
-	}
-	if (event->key() == Qt::Key_A) {
-		FrameAll();
-	}
-	if (event->key() == Qt::Key_Home) {
-		FrameTrue();
-	}
+	if (event->key() == Qt::Key_F) FrameSelected();
+	else if (event->key() == Qt::Key_A) FrameAll();
+	else if (event->key() == Qt::Key_Home) FrameTrue();
+
+	else if (event->key() == Qt::Key_Q) SnapEndpoints(true);
+	else if (event->key() == Qt::Key_W) RemoveOverlaps(true);
+	else if (event->key() == Qt::Key_E) MergeConnected(true);
+	else if (event->key() == Qt::Key_R) Simplify(true);
+	else if (event->key() == Qt::Key_T) Smooth(true);
+	else if (event->key() == Qt::Key_L) BasicCleanup(true);
+
+	else if (event->key() == Qt::Key_D) ComputeConnectionStatus(true);
+	else if (event->key() == Qt::Key_Delete ||
+		event->key() == Qt::Key_Backspace) RemoveUnusedConnections(true);
+	else if (event->key() == Qt::Key_S) CalcShapes(true);
+
+
+	else if (event->key() == Qt::Key_1) interactionButtons[InteractionMode::Examine]->click();
+	else if (event->key() == Qt::Key_2) interactionButtons[InteractionMode::Split]->click();
+	else if (event->key() == Qt::Key_3) interactionButtons[InteractionMode::Connect]->click();
+	else if (event->key() == Qt::Key_4) interactionButtons[InteractionMode::Delete]->click();
 }
 
 
@@ -294,32 +359,112 @@ void ImageViewer::SnapEndpoints(bool checked)
 
 void ImageViewer::RemoveOverlaps(bool checked)
 {
+	vectorGraphic.RemoveOverlaps();
+	ShowMat();
 }
 
 void ImageViewer::MergeConnected(bool checked)
 {
+	if (CtrlPressed()) {
+		float& angle = vectorGraphic.MIN_MERGE_ANGLE;
+		angle *= 180 / CV_PI;
+
+		InputDialog d;
+		d.AddItem(angle, "Minimum Angle In Degrees", 0, 180);
+		d.exec();
+
+		angle /= 180 / CV_PI;
+	}
+
+	vectorGraphic.MergeConnected();
+	ShowMat();
 }
 
 void ImageViewer::Simplify(bool checked)
 {
+	if (CtrlPressed()) {
+		InputDialog d;
+		d.AddItem(vectorGraphic.SIMPLIFY_MAX_DIST, "Maximum Merge Distance", 0, 500);
+		d.exec();
+	}
+
+	for (VE::PolylinePtr& p : vectorGraphic.Polylines) {
+		p->Simplify(vectorGraphic.SIMPLIFY_MAX_DIST);
+		p->Cleanup();
+	}
+
+	ShowMat();
 }
 
 void ImageViewer::Smooth(bool checked)
 {
+	if (CtrlPressed()) {
+		InputDialog d;
+		d.AddItem(vectorGraphic.SMOOTHING_ITERATIONS, "Iterations", 0, 100);
+		d.AddItem(vectorGraphic.SMOOTHING_LAMBDA, "Lambda", 0.f, 1.f);
+		d.exec();
+	}
+
+	for (VE::PolylinePtr& p : vectorGraphic.Polylines) {
+		p->Smooth(vectorGraphic.SMOOTHING_ITERATIONS, vectorGraphic.SMOOTHING_LAMBDA);
+		p->Cleanup();
+	}
+
+	ShowMat();
 }
 
 void ImageViewer::BasicCleanup(bool checked)
 {
+	vectorGraphic.SnapEndpoints();
+	vectorGraphic.RemoveOverlaps();
+	vectorGraphic.MergeConnected();
+
+
+	for (VE::PolylinePtr& p : vectorGraphic.Polylines) p->Simplify(vectorGraphic.SIMPLIFY_MAX_DIST);
+	for (VE::PolylinePtr& p : vectorGraphic.Polylines) p->Smooth(vectorGraphic.SMOOTHING_ITERATIONS, vectorGraphic.SMOOTHING_LAMBDA);
+	for (VE::PolylinePtr& p : vectorGraphic.Polylines) p->Cleanup();
+
+	vectorGraphic.ComputeConnectionStatus();
 }
 
 void ImageViewer::ComputeConnectionStatus(bool checked)
 {
+	vectorGraphic.ComputeConnectionStatus();
+	ShowMat();
 }
 
 void ImageViewer::RemoveUnusedConnections(bool checked)
 {
+	vectorGraphic.RemoveUnusedConnections();
+	ShowMat();
 }
 
 void ImageViewer::CalcShapes(bool checked)
 {
+	vectorGraphic.CalcShapes();
+	ShowMat();
+}
+
+void ImageViewer::ctExamine(bool checked)
+{
+	mode = InteractionMode::Examine;
+	interactionDraw = &ImageViewer::DrawHighlightPoints;
+}
+
+void ImageViewer::ctSplit(bool checked)
+{
+	mode = InteractionMode::Split;
+	interactionDraw = &ImageViewer::DrawHighlightPoints;
+}
+
+void ImageViewer::ctConnect(bool checked)
+{
+	mode = InteractionMode::Connect;
+	interactionDraw = &ImageViewer::DrawConnect;
+}
+
+void ImageViewer::ctDelete(bool checked)
+{
+	mode = InteractionMode::Delete;
+	interactionDraw = &ImageViewer::DrawHighlight;
 }

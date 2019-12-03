@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map> 
+
 #include <opencv2/core.hpp>
 #include <QtWidgets>
 
@@ -21,16 +23,25 @@ public:
 	void ConnectUi(Ui_ShapeEditor& se);
 
 private:
+	VE::Transform transform;
+	VectorGraphic vectorGraphic;
+
 	enum class InteractionMode {
 		Examine,
 		Split,
 		Connect,
 		Delete
 	};
+	std::unordered_map<InteractionMode, QPushButton*> interactionButtons;
+	typedef void (ImageViewer::*DrawFunction)();
+	DrawFunction interactionDraw = nullptr;
 
-	VE::Transform transform;
+	bool ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element);
 
-	VectorGraphic vectorGraphic;
+	// Draw Functions
+	void DrawHighlight();
+	void DrawHighlightPoints();
+	void DrawConnect();
 
 	void ShowMat();
 	void Frame(const VE::Bounds& bounds);
@@ -38,7 +49,11 @@ private:
 	void FrameAll();
 	void FrameTrue();
 
-	QPoint MousePosition(); 
+
+	inline QPoint QMousePosition();
+	inline VE::Point VEMousePosition();
+	bool CtrlPressed();
+	bool ShiftPressed();
 
 	QPoint mouseDown;
 	InteractionMode mode = InteractionMode::Examine;
@@ -68,4 +83,9 @@ public slots:
 	void RemoveUnusedConnections(bool checked);
 	void CalcShapes(bool checked);
 	
+	// change modes 
+	void ctExamine(bool checked);
+	void ctSplit(bool checked);
+	void ctConnect(bool checked);
+	void ctDelete(bool checked);
 };

@@ -142,7 +142,7 @@ namespace VE {
 		}
 	}
 
-	void Polyline::Draw(cv::Mat& img, Transform& t, bool highlight)
+	void Polyline::Draw(cv::Mat& img, Transform& t, cv::Scalar* pcolor, bool circles)
 	{
 		cv::Scalar color;
 		if (status == LineStat::std)
@@ -152,8 +152,8 @@ namespace VE {
 		else if (status == LineStat::invalid)
 			color = POLYLINE_COLOR_INVALID;
 
-		if (highlight)
-			color = HIGHLIGHT_COLOR;
+		if (pcolor != nullptr)
+			color = *pcolor;
 
 		// determine the minimum distance between two points
 		float minDist = MIN_DRAWING_DISTANCE;
@@ -176,11 +176,13 @@ namespace VE {
 
 		cv::polylines(img, &pts, &npts, 1, false, color, POLYLINE_LINETHICKNESS, POLYLINE_LINETYPE, 0);
 
-		if (highlight) {
+		if (circles) {
 			for (auto&pt:tmp)
 			{
 				cv::circle(img, pt, 1, HIGHLIGHT_CIRCLE_COLOR, 2);
 			}
+		}
+		if (highlight) {
 			drawBoundingBox(img, t);
 		}
 	}
