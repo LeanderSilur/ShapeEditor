@@ -44,6 +44,12 @@ namespace VE {
 			return (pt.x >= x0 && pt.x <= x1 &&
 				pt.y >= y0 && pt.y <= y1);
 		};
+		inline bool Contains(const Bounds& other) {
+			return (x0 < other.x0 &&
+				y0 < other.y0 &&
+				x1 > other.x1 &&
+				y1 > other.y1);
+		};
 		inline void Pad(const float& padding) {
 			x0 -= padding; y0 -= padding;
 			x1 += padding; y1 += padding;

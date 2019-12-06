@@ -24,6 +24,11 @@ namespace VE {
 	{
 	}
 
+	std::vector<Point>& Polyshape::getPoints()
+	{
+		return this->points;
+	}
+
 	void Polyshape::setConnections(std::vector<Connection>& connections)
 	{
 		// Validating connections.
@@ -48,25 +53,27 @@ namespace VE {
 	}
 
 
-	void Polyshape::Draw(cv::Mat& img, Transform& t, bool highlight)
+	void Polyshape::Draw(cv::Mat& img, Transform& t, const cv::Scalar& color)
 	{
-		if (points.size() < 2) {
-			std::cout << "Polyshape not calculated yet. Do a cleanup first!\n";
-			throw std::invalid_argument("Polyshape not calculated yet. Do a cleanup first!");
-		}
-
-		cv::Scalar color(200, 200, 170);
-
+		// This is copy-pasta from Polyline, fix this. [TODO]
 
 		// determine the minimum distance between two points
 		float minDist = MIN_DRAWING_DISTANCE;
 		t.applyInv(minDist);
 		float minDist2 = minDist * minDist;
-
-
+		
 		// Create a copy, then simplify it according to the Transforms mindist2.
-		auto drawPoints = points;
-		SimplifyNth(drawPoints, minDist2);
+		std::vector <VE::Point> drawPoints;
+		for (auto&con: connections)
+		{
+			auto& pts = con.polyline->getSimplified(minDist2);
+			if (con.at == Connection::Location::start) {
+				drawPoints.insert(drawPoints.end(), pts.begin() + 1, pts.end());
+			}
+			else {
+				drawPoints.insert(drawPoints.end(), pts.rbegin() + 1, pts.rend());
+			}
+		}
 
 		for (auto& pt : drawPoints)
 			t.apply(pt);
@@ -80,17 +87,12 @@ namespace VE {
 
 
 		cv::fillPoly(img, elementPoints, &numberOfPoints, 1, color, cv::LINE_AA);
-		drawBoundingBox(img, t);
+		//drawBoundingBox(img, t);
 	}
 
 	bool Polyshape::AnyPointInRect(Bounds& other)
 	{
 		return bounds.Overlap(other);
-	}	
-
-	Bounds& Polyshape::getBounds()
-	{
-		return Bounds();
 	}
 
 }

@@ -20,6 +20,7 @@ namespace VE {
 	// Polyline drawing options
 	const int POLYLINE_LINETYPE = cv::LINE_AA;
 	const int POLYLINE_LINETHICKNESS = 1;
+	const int POLYLINE_LINETHICKNESS_HIGHLIGHT = 3;
 	const cv::Scalar POLYLINE_COLOR_STD(160, 24, 160);
 	const cv::Scalar POLYLINE_COLOR_LOOP(0, 200, 0);
 	const cv::Scalar POLYLINE_COLOR_INVALID(255, 0, 0);
@@ -44,6 +45,8 @@ namespace VE {
 	typedef cv::Point2f Point;
 	class Polyline;
 	class Polyshape;
+	class ColorArea;
 	typedef std::shared_ptr<Polyline> PolylinePtr;
 	typedef std::shared_ptr<Polyshape> PolyshapePtr;
+	typedef std::shared_ptr<ColorArea> ColorAreaPtr;
 }

@@ -11,9 +11,9 @@ int main(int argc, char* argv[])
 {
 	QApplication a(argc, argv);
 
-	cv::Mat im = cv::imread("D:/190725_sequence_colorization/arc/test_files/w.png");
+	cv::Mat im = cv::imread("D:/190725_sequence_colorization/files/w.png");
 	VectorGraphic vg;
-	vg.LoadPolylines("D:/190725_sequence_colorization/PolyV_qt/x64/Release/w.pngLala.svg");
+	vg.LoadPolylines("D:/190725_sequence_colorization/files/simple4_lines.svg");
 
 	QWidget c;
 	Ui_ShapeEditor se;

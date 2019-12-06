@@ -4,6 +4,7 @@
 #include "Bounds.h"
 #include "Transform.h"
 #include "Connection.h"
+#include "ColorArea.h"
 
 
 namespace cv {
@@ -21,6 +22,6 @@ namespace VE {
 		void SimplifyNth(const std::vector<Point>& points, std::vector<Point>& result, const float& maxDist2);
 
 	public:
-		Bounds getBounds();
+		Bounds& getBounds();
 	};
 }

@@ -13,6 +13,8 @@ namespace VE {
 		enum class LineStat { std, loop, invalid };
 	protected:
 		std::vector<Point> points;
+		std::vector<Point> simplifiedPoints;
+		float simple_maxDist2 = -1;
 
 		cv::Mat_<float> features;
 		std::shared_ptr<cv::flann::Index> flannIndex;
@@ -37,6 +39,7 @@ namespace VE {
 		void setPoints(std::vector<Point>& inputPoints);
 		Point& getPoint(const int& i) { return points[i]; };
 		std::vector<Point>& getPoints();
+		const std::vector<Point>& getSimplified(float maxDist2);
 
 		Polyline();
 		Polyline(std::vector<Point>& points);
@@ -56,8 +59,7 @@ namespace VE {
 		void UpdateStatus() { status = getStatus(); };
 		LineStat Status() { return status; };
 
-		void Draw(cv::Mat& img, Transform& t,
-			cv::Scalar* pcolor = nullptr, bool circles = false);
+		void Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride = nullptr, bool circles = false);
 
 		bool AnyPointInRect(VE::Bounds& bounds);
 		float Distance2(Point& pt);
@@ -65,7 +67,6 @@ namespace VE {
 			const Point& pt,
 			float& distance2,
 			Point& closest);
-		Bounds& getBounds();
 
 		int PointIndex(const Point& pt, const float& maxDist2 = 0);
 		bool LongEnough() { return points.size() >= 2; };

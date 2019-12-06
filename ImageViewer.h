@@ -13,7 +13,7 @@ class ImageViewer : public QLabel
 	Q_OBJECT
 
 public:
-	const float HIGHLIGHT_DISTANCE = 256;
+	const float HIGHLIGHT_DISTANCE = 64;
 
 	ImageViewer(QWidget* parent = nullptr);
 
@@ -23,6 +23,15 @@ public:
 	void ConnectUi(Ui_ShapeEditor& se);
 
 private:
+	bool FILE_SAVE_LINES = true;
+	bool FILE_SAVE_SHAPES = false;
+
+	const cv::Scalar POLYLINE_EXAMINE = cv::Scalar(20, 200, 200);
+	const cv::Scalar POLYLINE_SPLIT = cv::Scalar(255, 200, 0);
+	const cv::Scalar POLYLINE_CONNECT1 = cv::Scalar(30, 180, 200);
+	const cv::Scalar POLYLINE_CONNECT2 = cv::Scalar(30, 255, 30);
+	const cv::Scalar POLYLINE_CONNECT_LINE = cv::Scalar(60, 150, 100);
+	const cv::Scalar POLYLINE_DELETE = cv::Scalar(255, 0, 0);
 	VE::Transform transform;
 	VectorGraphic vectorGraphic;
 
@@ -33,15 +42,25 @@ private:
 		Delete
 	};
 	std::unordered_map<InteractionMode, QPushButton*> interactionButtons;
-	typedef void (ImageViewer::*DrawFunction)();
-	DrawFunction interactionDraw = nullptr;
+	typedef void (ImageViewer::*VoidFunc)();
+	VoidFunc interactionDraw = nullptr;
+	typedef void (ImageViewer::* QMouseFunc)(QMouseEvent*);
+	QMouseFunc interactionRelease = nullptr;
 
 	bool ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element);
 
 	// Draw Functions
-	void DrawHighlight();
-	void DrawHighlightPoints();
+	void DrawHighlight(const cv::Scalar & color);
+	void DrawHighlightPoints(const cv::Scalar & color);
+	void DrawExamine();
+	void DrawSplit();
 	void DrawConnect();
+	void DrawDelete();
+
+	// Mouse Release Functions
+	void ReleaseSplit(QMouseEvent* event);
+	void ReleaseConnect(QMouseEvent* event);
+	void ReleaseDelete(QMouseEvent* event);
 
 	void ShowMat();
 	void Frame(const VE::Bounds& bounds);
@@ -55,7 +74,9 @@ private:
 	bool CtrlPressed();
 	bool ShiftPressed();
 
-	QPoint mouseDown;
+	QPoint mousePressPos;
+	QPoint mousePrevPos;
+	bool lmbHold = false;
 	InteractionMode mode = InteractionMode::Examine;
 
 	cv::Mat source;
@@ -88,4 +109,7 @@ public slots:
 	void ctSplit(bool checked);
 	void ctConnect(bool checked);
 	void ctDelete(bool checked);
+
+	void FileLoad(bool checked);
+	void FileSave(bool checked);
 };

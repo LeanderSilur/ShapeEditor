@@ -66,6 +66,7 @@ namespace VE {
 
 	void Polyline::setPoints(std::vector<Point>& inputPoints)
 	{
+
 		this->points = inputPoints;
 		Cleanup();
 	}
@@ -73,6 +74,16 @@ namespace VE {
 	std::vector<Point>& Polyline::getPoints()
 	{
 		return this->points;
+	}
+
+	const std::vector<Point>& Polyline::getSimplified(float maxDist2)
+	{
+		if (simple_maxDist2 != maxDist2) {
+			simplifiedPoints = points;
+			SimplifyNth(simplifiedPoints, maxDist2);
+			simple_maxDist2 = maxDist2;
+		}
+		return simplifiedPoints;
 	}
 
 	void Polyline::calculateKDTree()
@@ -117,6 +128,8 @@ namespace VE {
 	void Polyline::Simplify(const float& maxDist)
 	{
 		SimplifyNth(points, maxDist * maxDist);
+		simple_maxDist2 = maxDist * maxDist;
+		simplifiedPoints = points;
 	}
 
 	inline float Mag(const Point& pt)
@@ -125,6 +138,8 @@ namespace VE {
 	}
 	void Polyline::Smooth(const int& iterations, const float& lambda)
 	{
+		simple_maxDist2 = -1;
+
 		for (int i = 0; i < iterations; ++i)
 		{
 			for (int j = 1; j < points.size() - 1; j++)
@@ -142,7 +157,7 @@ namespace VE {
 		}
 	}
 
-	void Polyline::Draw(cv::Mat& img, Transform& t, cv::Scalar* pcolor, bool circles)
+	void Polyline::Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride, bool circles)
 	{
 		cv::Scalar color;
 		if (status == LineStat::std)
@@ -152,8 +167,11 @@ namespace VE {
 		else if (status == LineStat::invalid)
 			color = POLYLINE_COLOR_INVALID;
 
-		if (pcolor != nullptr)
-			color = *pcolor;
+		float thickness = POLYLINE_LINETHICKNESS;
+		if (colorOverride != nullptr) {
+			color = *colorOverride;
+			thickness = POLYLINE_LINETHICKNESS_HIGHLIGHT;
+		}
 
 		// determine the minimum distance between two points
 		float minDist = MIN_DRAWING_DISTANCE;
@@ -162,11 +180,13 @@ namespace VE {
 
 
 		// Create a copy, then simplify it according to the Transforms mindist2.
-		auto drawPoints = points;
-		SimplifyNth(drawPoints, minDist2);
+		auto drawPoints = getSimplified(minDist2);
 
 		for(auto&pt: drawPoints)
 			t.apply(pt);
+
+		if (drawPoints.empty())
+			throw std::invalid_argument("Points are empty.");
 
 		std::vector<cv::Point2i> tmp;
 		cv::Mat(drawPoints).copyTo(tmp);
@@ -174,7 +194,7 @@ namespace VE {
 		const cv::Point* pts = (const cv::Point*) cv::Mat(tmp).data;
 		int npts = cv::Mat(tmp).rows;
 
-		cv::polylines(img, &pts, &npts, 1, false, color, POLYLINE_LINETHICKNESS, POLYLINE_LINETYPE, 0);
+		cv::polylines(img, &pts, &npts, 1, false, color, thickness, POLYLINE_LINETYPE, 0);
 
 		if (circles) {
 			for (auto&pt:tmp)
@@ -182,7 +202,7 @@ namespace VE {
 				cv::circle(img, pt, 1, HIGHLIGHT_CIRCLE_COLOR, 2);
 			}
 		}
-		if (highlight) {
+		if (colorOverride != nullptr) {
 			drawBoundingBox(img, t);
 		}
 	}
@@ -257,11 +277,6 @@ namespace VE {
 					closest = other;
 			}
 		}
-	}
-
-	Bounds& Polyline::getBounds()
-	{
-		return bounds;
 	}
 
 	// Get the Index of the point closest to (param) pt

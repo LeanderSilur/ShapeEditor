@@ -80,7 +80,7 @@ namespace VE {
 		}
 	}
 
-	Bounds VectorElement::getBounds()
+	Bounds& VectorElement::getBounds()
 	{
 		return bounds;
 	}

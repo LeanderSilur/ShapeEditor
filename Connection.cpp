@@ -3,35 +3,45 @@
 #include "Polyline.h"
 
 namespace VE {
+	Connection::Connection()
+	{
+		polyline = nullptr;
+	}
+
+	Connection::Connection(PolylinePtr& pl, Location l)
+	{
+		polyline = pl;
+		at = l;
+	}
 
 	void Connection::Invert() {
-		if (at == Connection::start)
-			at = Connection::end;
-		else at = Connection::start;
+		if (at == Location::start)
+			at = Location::end;
+		else at = Location::start;
 	}
 
 	Point& Connection::StartPoint() {
-		if (at == Connection::start)
+		if (at == Location::start)
 			return polyline->Front();
 		return polyline->Back();
 	}
 
 	Point& Connection::EndPoint() {
-		if (at == Connection::start)
+		if (at == Location::start)
 			return polyline->Back();
 		return polyline->Front();
 	}
 
 	Point& Connection::StartPoint1()
 	{
-		if (at == Connection::start)
+		if (at == Location::start)
 			return polyline->Front1();
 		return polyline->Back1();
 	}
 
 	Point& Connection::EndPoint1()
 	{
-		if (at == Connection::start)
+		if (at == Location::start)
 			return polyline->Back1();
 		return polyline->Front1();
 	}
@@ -40,7 +50,7 @@ namespace VE {
 	{
 		auto& polypoints = polyline->getPoints();
 
-		if (at == Connection::start)
+		if (at == Location::start)
 			points.insert(points.end(), polypoints.begin(), polypoints.end() - removeLast);
 		else
 			points.insert(points.end(), polypoints.rbegin(), polypoints.rend() - removeLast);
@@ -52,7 +62,7 @@ namespace VE {
 
 	void Connection::SortOther(std::vector<Connection>& others)
 	{
-		std::vector<Connection> sorted(others.size());
+		std::vector<Connection> sorted;
 		VE::Point a = EndPoint1(),
 			b = EndPoint();
 
@@ -75,7 +85,25 @@ namespace VE {
 				}
 			}
 			sorted.push_back(*leftmostCon);
+			others.erase(leftmostCon);
 		}
 		others = std::move(sorted);
+	}
+	float Connection::AngleArea(Connection& other)
+	{
+		float endAngle = (other.StartPoint1().x - other.StartPoint().x) *
+			(other.StartPoint1().y + other.StartPoint().y);
+		
+		float angle = 0;
+
+		std::vector<VE::Point>& points = polyline->getPoints();
+		for (auto it = points.begin() + 1; it != points.end(); it++)
+		{
+			angle += ((*it).x - (*(it - 1)).x) * ((*it).y + (*(it - 1)).y);
+		}
+
+		if (at == Location::end)
+			angle = -angle;
+		return endAngle + angle;
 	}
 }
