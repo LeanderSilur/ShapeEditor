@@ -40,6 +40,7 @@ namespace VE {
 		Point& getPoint(const int& i) { return points[i]; };
 		std::vector<Point>& getPoints();
 		const std::vector<Point>& getSimplified(float maxDist2);
+		inline float getMaxLength() { return maxLength; };
 
 		Polyline();
 		Polyline(std::vector<Point>& points);

@@ -18,5 +18,6 @@ namespace VE {
 
 		void apply(float& d);
 		void applyInv(float& d);
+		void Reset();
 	};
 }

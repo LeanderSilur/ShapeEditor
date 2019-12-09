@@ -55,6 +55,10 @@ namespace VE {
 			x1 += padding; y1 += padding;
 		};
 
+		inline float Area() {
+			return (x1 - x0) * (y1 - y0);
+		};
+
 		inline cv::Rect2f Rect() {
 			return cv::Rect2f(x0, y0, x1 - x0, y1 - y0);
 		};

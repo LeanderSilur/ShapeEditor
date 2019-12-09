@@ -35,4 +35,10 @@ namespace VE {
 	{
 		d /= scale;
 	}
+	void Transform::Reset()
+	{
+		x = 0;
+		y = 0;
+		scale = 1.0f;
+	}
 }

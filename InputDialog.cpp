@@ -101,6 +101,20 @@ void InputDialog::AddItem(int& i, std::string text, int min, int max)
 
 }
 
+void InputDialog::AddItem(std::string& str, std::string text)
+{
+	QLineEdit* edit = new QLineEdit();
+	static_cast<QGridLayout*>(layout())->addWidget(new QLabel(text.c_str()), widgets.size(), 0);
+	static_cast<QGridLayout*>(layout())->addWidget(edit, widgets.size(), 1);
+	edit->setText(str.c_str());
+	widgets.push_back(edit);
+	values.push_back(&str);
+
+	QObject::connect(edit, &QLineEdit::textEdited,
+		this, &InputDialog::strChanged);
+	edit->installEventFilter(this);
+}
+
 bool InputDialog::eventFilter(QObject* object, QEvent* event)
 {
 	if (event->type() == QEvent::KeyPress) {
@@ -157,4 +171,10 @@ void InputDialog::intChanged(const QString& val)
 {
 	int index = getIndex(QObject::sender());
 	*((int*)values[index]) = val.toInt();
+}
+
+void InputDialog::strChanged(const QString& val)
+{
+	int index = getIndex(QObject::sender());
+	*((std::string*)values[index]) = val.toStdString();
 }

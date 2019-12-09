@@ -142,7 +142,7 @@ namespace VE {
 
 		for (int i = 0; i < iterations; ++i)
 		{
-			for (int j = 1; j < points.size() - 1; j++)
+			for (int j = 1; j < (int)points.size() - 1; j++)
 			{
 				Point& prev = points[j - 1] - points[j];
 				Point& next = points[j + 1] - points[j];
@@ -228,6 +228,7 @@ namespace VE {
 
 	void Polyline::Closest2(const Point& from, float& distance2, Point& closest)
 	{
+
 		// The distance2 parameter is the squared maximum distance.
 		// cv::flann uses the squared distance, but I need to add
 		// maxLength/2  ^2
@@ -244,20 +245,30 @@ namespace VE {
 		// the point to line distance, which will usually be shorter
 		// than the distance between the vertex and the search_point.
 		for (int i = 0; i < SEARCH_MAX_NEIGHBOURS; i++) {
+
 			int index = indices.at<int>(i);
 			if (index < 0) {
 				// No (more) points found.
 				break;
 			}
+			if (index > 10000) {
+				std::cout << "index too large.\n";
+				throw std::invalid_argument(".......");
+			}
+			std::cout << "    ind++\n";
+
 			Point pointOnLine;
 			float distancePrev = FMAX;
 			float distanceNext = FMAX;
+			std::cout << "    pol++\n";
 			if (index > 0) {
+				std::cout << index << ", "<< points[index - 1] << ", " << points.size() << std::endl;
 				distancePrev = distancePointLine2(points[index], points[index - 1], from, pointOnLine);
 			}
-			if (index < points.size() - 1) {
+			if (index < (int)points.size() - 1) {
 				distanceNext = distancePointLine2(points[index], points[index + 1], from, pointOnLine);
 			}
+			std::cout << "    dNext++\n";
 
 			if (distance2 > std::min(distancePrev, distanceNext)) {
 				Point other;
@@ -277,6 +288,7 @@ namespace VE {
 					closest = other;
 			}
 		}
+		std::cout << "    end\n";
 	}
 
 	// Get the Index of the point closest to (param) pt

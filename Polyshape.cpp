@@ -4,6 +4,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include "Polyline.h"
+#include "ColorArea.h"
 
 
 namespace VE {
@@ -29,12 +30,24 @@ namespace VE {
 		return this->points;
 	}
 
+	VE::ColorAreaPtr Polyshape::getColor()
+	{
+		return color;
+	}
+
+	void Polyshape::setColor(VE::ColorAreaPtr& col)
+	{
+		color = col;
+	}
+
 	void Polyshape::setConnections(std::vector<Connection>& connections)
 	{
 		// Validating connections.
 		if (connections.size() == 0 ||
-			(connections.size() == 1 && connections[0].EndPoint() != connections[0].StartPoint()))
+			(connections.size() == 1 && connections[0].EndPoint() != connections[0].StartPoint())) {
+			valid = false;
 			throw std::invalid_argument("Not gud.");
+		}
 
 		for (auto con = connections.begin() + 1; con != connections.end(); con++)
 		{
@@ -43,17 +56,19 @@ namespace VE {
 			}
 		}
 
-		// all good
+		// All good.
 		this->connections = connections;
+		CalculateDirection();
+		valid = true;
 	}
 
-	std::vector<Connection>& Polyshape::getConnections()
+	const std::vector<Connection>& Polyshape::getConnections()
 	{
 		return connections;
 	}
 
 
-	void Polyshape::Draw(cv::Mat& img, Transform& t, const cv::Scalar& color)
+	void Polyshape::Draw(cv::Mat& img, Transform& t)
 	{
 		// This is copy-pasta from Polyline, fix this. [TODO]
 
@@ -85,14 +100,27 @@ namespace VE {
 		const cv::Point2i* elementPoints[1] = { &tmp[0] };
 		int numberOfPoints = (int)tmp.size();
 
-
-		cv::fillPoly(img, elementPoints, &numberOfPoints, 1, color, cv::LINE_AA);
+		cv::fillPoly(img, elementPoints, &numberOfPoints, 1, color->Color, cv::LINE_AA);
 		//drawBoundingBox(img, t);
 	}
 
 	bool Polyshape::AnyPointInRect(Bounds& other)
 	{
 		return bounds.Overlap(other);
+	}
+
+	void Polyshape::CalculateDirection()
+	{
+		float angle = connections.back().AngleArea(connections.front());
+		for (int i = 0; i < (int)connections.size() - 1; i++) {
+			angle += connections[i].AngleArea(connections[i + 1]);
+		}
+		counterClockwise = angle > 0;
+	}
+
+	bool Polyshape::CounterClockwise()
+	{
+		return counterClockwise;
 	}
 
 }

@@ -9,9 +9,14 @@ namespace VE {
 		Connection();
 		Connection(PolylinePtr& pl, Location l);
 		
+
+
 		inline bool operator==(const Connection& other) {
-			if (other.polyline != polyline) return false;
-			if (other.at != at) return false;
+			return Cmp(*this, other);
+		};
+		inline static bool Cmp(const Connection& a, const Connection& b) {
+			if (a.polyline != b.polyline) return false;
+			if (a.at != b.at) return false;
 			return true;
 		};
 

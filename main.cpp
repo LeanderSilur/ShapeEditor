@@ -6,24 +6,20 @@
 #include "ui_ShapeEditor.h"
 #include "InputDialog.h"
 
+#include <filesystem>
 
 int main(int argc, char* argv[])
 {
+	std::cout << std::filesystem::current_path();
 	QApplication a(argc, argv);
 
-	cv::Mat im = cv::imread("D:/190725_sequence_colorization/files/w.png");
-	VectorGraphic vg;
-	vg.LoadPolylines("D:/190725_sequence_colorization/files/simple4_lines.svg");
 
 	QWidget c;
 	Ui_ShapeEditor se;
 	se.setupUi(&c);
 
 	ImageViewer *iw = new ImageViewer(se.viewerGrp);
-	iw->setGraphic(vg);
-	iw->setMat(im);
 
-	//se.viewerGrp->layout()->addWidget(iw);
 	c.show();
 
 

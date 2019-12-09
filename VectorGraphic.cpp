@@ -212,9 +212,80 @@ void VectorGraphic::SavePolylines(std::string path, std::string image_path, cv::
 	Export::SaveSVG(path, image_path, shape, Polylines);
 }
 
+// Saves the polyshapes, mergeing shapes of the same ColorArea prior.
+// Also extract the smaller shapes from larger ones which contain them.
 void VectorGraphic::SavePolyshapes(std::string path, std::string image_path, cv::Size2i shape)
 {
-	Export::SaveSVG(path, image_path, shape, Polyshapes);
+	// Merge same ColorArea shapes.
+	auto saveShapes = Polyshapes;
+	decltype(saveShapes) mergedShapes;
+	while(!saveShapes.empty())
+	{
+		std::vector<Connection> cons;
+		auto shapeA = std::move(saveShapes.back());
+		cons.insert(cons.end(), shapeA->getConnections().begin(), shapeA->getConnections().end());
+		saveShapes.pop_back();
+		auto& colorArea = shapeA->getColor();
+
+		for (int i = 0; i < saveShapes.size(); i++)
+		{
+			auto& shapeB = saveShapes[i];
+			
+			if (colorArea == shapeB->getColor())
+			{
+				cons.insert(cons.end(), shapeB->getConnections().begin(), shapeB->getConnections().end());
+				saveShapes.erase(saveShapes.begin() + i);
+				i--;
+			}
+		}
+
+		// Remove doubles.
+		for (int a = 0; a < cons.size(); a++)
+		{
+			for (int b = a+1; b < cons.size(); b++) {
+				if (cons[a].polyline == cons[b].polyline) {
+					// This is a double polyline traced from both ends.
+					cons.erase(cons.begin() + b);
+					cons.erase(cons.begin() + a);
+					a--;
+					break;
+				}
+			}
+		}
+
+		std::vector<Connection> shapeCons = { std::move(cons.back()) };
+		cons.pop_back();
+
+		// Retrace shapes.
+		while (true) {
+			if (shapeCons.front().StartPoint() == shapeCons.back().EndPoint()) {
+				// Closed shape.
+				mergedShapes.push_back(std::make_shared<Polyshape>());
+				mergedShapes.back()->setConnections(shapeCons);
+				mergedShapes.back()->setColor(colorArea);
+				mergedShapes.back()->Cleanup();
+
+				if (cons.empty())
+					break;
+
+				// Start a new shape.
+				shapeCons = { std::move(cons.back()) };
+				cons.pop_back();
+			}
+			for (int i = 0; i < cons.size(); i++)
+			{
+				if (shapeCons.back().EndPoint() == cons[i].StartPoint())
+				{
+					shapeCons.push_back(cons[i]);
+					cons.erase(cons.begin() + i);
+					break;
+				}
+			}
+		}
+	}
+	
+	SortShapes(mergedShapes);
+	Export::SaveSVG(path, image_path, shape, mergedShapes);
 }
 
 // Snap endpoints of curves
@@ -304,7 +375,7 @@ void VectorGraphic::RemoveOverlaps()
 		std::vector<VE::Point>& points = polyline->getPoints();
 		decltype(Polylines) newPolylines;
 
-		for (size_t j = 0; j < points.size() - 1; j++)
+		for (size_t j = 0; j < (int)points.size() - 1; j++)
 		{
 			// Compare to all the other polylines
 			for (auto otherLine = Polylines.begin(); otherLine != Polylines.end(); otherLine++)
@@ -362,7 +433,7 @@ void VectorGraphic::MergeConnected()
 	bool limitAngle = MIN_MERGE_ANGLE >= CV_PI - VE::EPSILON;
 
 
-	for (int i = Polylines.size() - 1; i >= 0; )
+	for (int i = (int)Polylines.size() - 1; i >= 0; )
 	{
 		VE::PolylinePtr mainPolyline = Polylines[0];
 		std::vector<Connection> connections;
@@ -573,8 +644,237 @@ void VectorGraphic::Delete(VE::PolylinePtr line)
 	DeleteConnections(line);
 }
 
-void VectorGraphic::ClosestPolyline(cv::Mat & img, VE::Transform& t, float & distance2, const VE::Point & pt,
-	VE::Point & closest, VE::PolylinePtr& element)
+// Traces a single shape, starting from connections.back().
+// Removes the connections of the shape on the way. If the shape is
+// invalid, a nullptr is returned.
+void VectorGraphic::TraceSingleShape(std::vector<VE::Connection> & connections, VE::PolyshapePtr& result)
+{
+	result = nullptr;
+
+	std::vector<Connection> shapeCons;
+	std::vector<Connection> potentialConnections;
+
+	shapeCons.push_back(std::move(connections.back()));
+	connections.pop_back();
+
+	// Get the loop out first.
+	auto& pl = shapeCons[0].polyline;
+	if (pl->Back() == pl->Front()) {
+		goto TraceSingleShape_Finalize;
+	}
+
+	// Trace the connections for shapes with multiple components.
+	do {
+		VE::Point& currentEndPoint = shapeCons.back().EndPoint();
+
+		// Populate the PotentialConnections.
+		potentialConnections.clear();
+		for (auto& potCon : connections)
+		{
+			
+			if (potCon.StartPoint() == currentEndPoint &&
+				// Don't allow loops
+				potCon.polyline->Back() != potCon.polyline->Front())
+			{
+				bool already_used_polyline = false;
+				for (auto&shapeCon:shapeCons)
+					if (shapeCon.polyline == potCon.polyline) {
+						already_used_polyline = true;
+						break;
+					}
+				if (!already_used_polyline)
+					potentialConnections.push_back(potCon);
+			}
+		}
+
+		// Sort the potential connections from left-to-right and add the
+		// best match to the shapeCons and remove it from all the "connections".
+		if (!potentialConnections.empty()) {
+			shapeCons.back().SortOther(potentialConnections);
+			auto& bestMatch = potentialConnections[0];
+
+			auto item = std::find(connections.begin(), connections.end(), bestMatch);
+			shapeCons.push_back(*item);
+			connections.erase(item);
+		}
+
+		// Check if we can close the shape.
+		if (shapeCons.front().StartPoint() == shapeCons.back().EndPoint()) {
+			goto TraceSingleShape_Finalize;
+		}
+	} while (!potentialConnections.empty());
+
+	return;
+
+TraceSingleShape_Finalize:
+	// Calculate angles to verify the shape.
+	auto shape = std::make_shared<Polyshape>();
+	shape->setConnections(shapeCons);
+
+	// A positive angle means correct way around.
+	if (shape->CounterClockwise()) {
+		shape->Cleanup();
+		result = shape;
+	}
+	else {
+		std::cout << "Shape is inverted.\n";
+	}
+}
+
+void VectorGraphic::CalcShapes()
+{
+	Polyshapes.clear();
+
+	// Calculate the shapes with multiple connections.
+	std::vector<Connection> allCons;
+	for (auto& pl : Polylines) {
+		allCons.push_back(Connection(pl, Connection::Location::start));
+		allCons.push_back(Connection(pl, Connection::Location::end));
+	}
+
+	while (!allCons.empty()) {
+		VE::PolyshapePtr shape;
+		TraceSingleShape(allCons, shape);
+		if (shape != nullptr)
+			Polyshapes.push_back(shape);
+	}
+
+
+	SortShapes();
+}
+
+void VectorGraphic::ColorShapesRandom()
+{
+	const std::vector<cv::Scalar> coolColors = { cv::Scalar(240,163,255),cv::Scalar(0,117,220), cv::Scalar(153,63,0), cv::Scalar(76,0,92), cv::Scalar(25,25,25), cv::Scalar(0,92,49), cv::Scalar(43,206,72), cv::Scalar(255,204,153), cv::Scalar(128,128,128), cv::Scalar(148,255,181), cv::Scalar(143,124,0), cv::Scalar(157,204,0), cv::Scalar(194,0,136), cv::Scalar(0,51,128), cv::Scalar(255,164,5), cv::Scalar(255,168,187), cv::Scalar(66,102,0), cv::Scalar(255,0,16), cv::Scalar(94,241,242), cv::Scalar(0,153,143), cv::Scalar(224,255,102), cv::Scalar(116,10,255), cv::Scalar(153,0,0), cv::Scalar(255,255,128), cv::Scalar(255,255,0), cv::Scalar(255,80,5) };
+	auto color = coolColors.begin();
+	for (auto&shape:Polyshapes)
+	{
+		shape->getColor()->Color = *color;
+		if (++color == coolColors.end())
+			color = coolColors.begin();
+	}
+}
+
+// Sort the polyshapes, placing smaller ones in bigger ones for correct drawing.
+void VectorGraphic::SortShapes()
+{
+	SortShapes(Polyshapes);
+}
+
+void VectorGraphic::SortShapes(std::vector<PolyshapePtr>& shapes)
+{
+	// Sort shapes => small shapes have to come last to not be
+	// covered by the bigger shapes.
+	for (int a = 0; a < (int)shapes.size() - 1; a++)
+	{
+		auto& shapeA = shapes[a];
+
+		for (auto b = a + 1; b < shapes.size(); b++)
+		{
+			auto& shapeB = shapes[b];
+
+			auto& boundsA = shapeA->getBounds();
+			auto& boundsB = shapeB->getBounds();
+
+			if (boundsB.Contains(boundsA)) {
+				shapes.insert(shapes.begin() + b + 1, shapeA);
+				shapes.erase(shapes.begin() + a);
+				a--;
+				b = (int)shapes.size() - 1;
+			}
+		}
+	}
+}
+
+// Creates a new shape by getting the Polyline, left to the target
+// point, and tracing the connections. Returns a nullptr if there
+// is tracable outline.
+VE::PolyshapePtr VectorGraphic::CreateShape(const VE::Point & target)
+{
+	// Find closest left Polyline, with none invalid status.
+	VE::PolyshapePtr shape = std::make_shared<Polyshape>();
+
+
+	VE::Connection conResult;
+	if (!ClosestConnectionLeft(target, Polylines, conResult)) {
+		return nullptr;
+	}
+
+	std::vector<Connection> allCons;
+	for (auto& pl : Polylines) {
+		allCons.push_back(Connection(pl, Connection::Location::start));
+		allCons.push_back(Connection(pl, Connection::Location::end));
+	}
+
+	allCons.erase(std::find(allCons.begin(), allCons.end(), conResult));
+
+	allCons.push_back(conResult);
+
+	VE::PolyshapePtr ptr = nullptr;
+	TraceSingleShape(allCons, ptr);
+
+	return ptr;
+}
+
+VE::PolyshapePtr VectorGraphic::ColorShape(const VE::Point& pt)
+{
+	// Create new shape, there could be a larger shape in which we
+	// click otherwise.
+	VE::PolyshapePtr shape = CreateShape(pt);
+	
+	if (shape == nullptr) return shape;
+
+	auto& shapeCon0 = shape->getConnections()[0];
+	bool found = false;
+
+	for (auto&ps:Polyshapes)
+	{
+		for (auto&con:ps->getConnections())
+		{
+			if (VE::Connection::Cmp(con, shapeCon0)) {
+				shape = ps;
+				found = true;
+				break;
+			}
+		}
+	}
+	if (!found) {
+		Polyshapes.push_back(shape);
+		SortShapes();
+	}
+
+	if (shape != nullptr) {
+		shape->setColor(this->ActiveColor);
+	}
+
+	return shape;
+}
+
+void VectorGraphic::PickColor(const VE::Point& pt)
+{
+	VE::PolyshapePtr shape;
+	ClosestPolyshape(pt, shape);
+
+	if (shape != nullptr) {
+		ActiveColor = shape->getColor();
+	}
+}
+
+bool VectorGraphic::DeleteShape(const VE::Point& pt)
+{
+	VE::PolyshapePtr shape = nullptr;
+	ClosestPolyshape(pt, shape);
+
+	if (shape != nullptr) {
+		auto it = std::find(Polyshapes.begin(), Polyshapes.end(), shape);
+		Polyshapes.erase(it);
+		return true;
+	}
+	return false;
+}
+
+void VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
+	VE::Point& closest, VE::PolylinePtr& element)
 {
 	Bounds bounds(0, 0, img.cols, img.rows);
 	t.applyInv(bounds);
@@ -586,13 +886,13 @@ void VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const 
 {
 	int id = 0,
 		closest_id = 0;
-	for (auto pl = Polylines.begin(); pl != Polylines.end(); pl++) {
+	for (auto&pl:Polylines) {
 		// Check for visibility first.
-		if ((*pl)->AnyPointInRect(bounds)) {
+		if (pl->AnyPointInRect(bounds)) {
 			float previous = distance2;
-			(*pl)->Closest2(pt, distance2, closest);
+			pl->Closest2(pt, distance2, closest);
 			if (previous != distance2) {
-				element = *pl;
+				element = pl;
 				closest_id = id;
 			}
 		}
@@ -601,125 +901,122 @@ void VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const 
 	//std::cout << closest << "\n";
 }
 
-void VectorGraphic::CalcShapes()
+bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float& maxDist, bool&downwards)
 {
-	// Shapes statueses' should be "computed" already.
+	const float origMaxDist = maxDist;
+	// Check the the polyline's bound will hold a left collision.
+	auto& plBounds = line->getBounds();
+	if (plBounds.x0 >= target.x
+		|| target.x - plBounds.x1 > maxDist
+		|| plBounds.y0 >= target.y
+		|| plBounds.y1 <= target.y) {
+		return false;
+	}
 
-	Polyshapes.clear();
-	auto remainingLines = Polylines;
+	float maxLen = line->getMaxLength();
+	float x_max = target.x + maxLen;
+	float y_min = target.y - maxLen;
+	float y_max = target.y + maxLen;
 
-	// Get the loops out first.
-	for (int i = 0; i < remainingLines.size(); i++)
+	auto& pts = line->getPoints();
+
+	for (auto pt = pts.begin(); pt!= pts.end() - 1; pt ++)
 	{
-		auto& pl = remainingLines[i];
-		if (pl->Status() == Polyline::LineStat::loop) {
-			auto shape = std::make_shared<Polyshape>();
-			Connection con;
-			con.polyline = pl;
-			con.at = Connection::Location::start;
-			std::vector<Connection> cons = { con };
-			shape->setConnections(cons);
-			Polyshapes.push_back(shape);
+		// Check if in y-range.
+		if ((*pt).x >= x_max ||
+			(*pt).y <= y_min ||
+			(*pt).y >= y_max) {
+			continue;
+		}
+		bool pt1_below = (*pt).y <= target.y;
+		auto& next = *(pt + 1);
+		bool pt2_below = (*(pt + 1)).y <= target.y;
+		if (pt1_below == pt2_below) {
+			continue;
+		}
 
-			remainingLines.erase(remainingLines.begin() + i);
-			i--;
+
+		// Do a simple linear intersection, which should be inbetween
+		// the two points.
+		float m = (target.y - (*pt).y) / ((*(pt + 1)).y - (*pt).y);
+		assert(m >= 0 && m <= 1);
+
+		float x = (*pt).x + m * ((*(pt + 1)).x - (*pt).x);
+		if (target.x > x) {
+			float newDist = target.x - x;
+			if (newDist < maxDist) {
+				maxDist = newDist;
+				downwards = pt1_below;
+			}
 		}
 	}
+	return maxDist < origMaxDist;
+}
 
-	// Calculate the shapes with multiple connections with the
-	// left-hand method.
-	std::vector<Connection> allCons;
-	for (auto& pl : remainingLines) {
-		allCons.push_back(Connection(pl, Connection::Location::start));
-		allCons.push_back(Connection(pl, Connection::Location::end));
+
+bool VectorGraphic::ClosestConnectionLeft(const VE::Point& target, std::vector<VE::PolylinePtr>& lines, VE::Connection& result)
+{
+	VE::PolylinePtr closest = nullptr;
+	bool downwards;
+	float maxDist = VE::FMAX;
+
+	for (auto& line : lines) {
+		if (ClosestPolylineLeft1(target, line, maxDist, downwards)) {
+			closest = line;
+		}
 	}
-	int amount = 0;
-
-	while (!allCons.empty()) {
-		std::vector<Connection> shapeCons;
-		shapeCons.push_back(std::move(allCons.back()));
-		allCons.pop_back();
-
-		std::vector<Connection> potentialConnections;
-		do {
-			VE::Point& pt = shapeCons.back().EndPoint();
-			potentialConnections.clear();
-			for (auto& c : allCons)
-			{
-				// Make sure we don't connect to the same polyline in reverse.
-				if (c.StartPoint() == pt &&
-					c.polyline != shapeCons.back().polyline) {
-					potentialConnections.push_back(c);
-				}
-			}
-
-			// Get the potential connections and sort the from ltr.
-			if (!potentialConnections.empty()) {
-				shapeCons.back().SortOther(potentialConnections);
-				auto& bestMatch = potentialConnections[0];
-
-				auto item = std::find(allCons.begin(), allCons.end(), bestMatch);
-				if (item == allCons.end())
-					throw std::invalid_argument("The vector didn't contain the 'bestMatch'.");
-
-				shapeCons.push_back(*item);
-				allCons.erase(item);
-			}
-
-			// Check if we can close the shape.
-			if (shapeCons.front().StartPoint() == shapeCons.back().EndPoint()) {
-				// Calculate angles to verify the shape.
-				float angle = shapeCons.back().AngleArea(shapeCons.front());
-				for (int i = 0; i < shapeCons.size() - 1; i++) {
-					angle += shapeCons[i].AngleArea(shapeCons[i + 1]);
-				}
-
-				// A positive angle means correct way around.
-				if (angle > 0) {
-					auto shape = std::make_shared<Polyshape>();
-					shape->setConnections(shapeCons);
-					Polyshapes.push_back(shape);
-					amount++;
-				}
-				else {
-					std::cout << "Shape is inverted.\n";
-				}
-
-				// Clear the rest to break;
-				potentialConnections.clear();
-			}
-
-		} while (!potentialConnections.empty());
-
-		// If shapeCons has not been built into a Polyshape it expires.
+	if (closest == nullptr)	{
+		return false;
 	}
-
-	// Cleanup (calculating the border)
-	for (auto& s : Polyshapes) {
-		s->Cleanup();
+	else {
+		result = Connection(closest, VE::Connection::Location::start);
+		if (!downwards)
+			result.at = VE::Connection::Location::end;
+		return true;
 	}
+}
 
-	// Sort shapes => small shapes have to come last to not be
-	// covered by the bigger shapes.
-	for (int i = 0; i < Polyshapes.size() - 1; i++)
+// For interactive picking.
+// Get the left-closest intersection.
+void VectorGraphic::ClosestPolyshape(const VE::Point& target, VE::PolyshapePtr& element)
+{
+	element = nullptr;
+
+	// Make a list of all relevant lines used in the Polyshapes.
+	std::vector<VE::PolylinePtr> lines;
+	std::vector<VE::PolyshapePtr> shapes;
+
+	for (auto ps = Polyshapes.begin(); ps != Polyshapes.end(); ps++)
 	{
-		auto shapeA = Polyshapes.begin() + i;
+		auto& elBounds = (*ps)->getBounds();
+		if (!(*ps)->getBounds().Contains(target)) {
+			continue;
+		}
 
-		for (auto shapeB = shapeA + 1; shapeB != Polyshapes.end(); shapeB++)
+		shapes.push_back(*ps);
+		for (auto& con : (*ps)->getConnections())
 		{
-			auto& boundsA = (*shapeA)->getBounds();
-			auto& boundsB = (*shapeB)->getBounds();
-
-			if (boundsB.Contains(boundsA)) {
-				Polyshapes.insert(shapeB + 1, (*shapeA));
-				Polyshapes.erase(shapeA);
-				i--;
-				shapeB = Polyshapes.end() - 1;
-			}
+			if (std::find(lines.begin(), lines.end(), con.polyline) == lines.end())
+				lines.push_back(con.polyline);
 		}
-
 	}
 
+	VE::Connection conResult;
+	if (!ClosestConnectionLeft(target, lines, conResult)) {
+		return;
+	}
+
+	for (auto ps = shapes.rbegin(); ps != shapes.rend(); ps++) {
+		for (auto& con : (*ps)->getConnections()) {
+			if (VE::Connection::Cmp(con, conResult)) {
+				element = (*ps);
+				return;
+			}
+		}
+	}
+	
+	// If we reach this position, then we have clicked in a bounding box,
+	// but not inside a polyshape.
 }
 
 inline void ClosestEndPoint_TryReplace(float& maxDist2, const VE::Point& target, const VE::Point& candidate, VE::Point& closest) {
@@ -754,18 +1051,12 @@ void VectorGraphic::Draw(cv::Mat& img, VE::Transform& t)
 	Bounds bounds(0, 0, img.cols, img.rows);
 	t.applyInv(bounds);
 
-
-	const std::vector<cv::Scalar> coolColors = { cv::Scalar(240,163,255),cv::Scalar(0,117,220), cv::Scalar(153,63,0), cv::Scalar(76,0,92), cv::Scalar(25,25,25), cv::Scalar(0,92,49), cv::Scalar(43,206,72), cv::Scalar(255,204,153), cv::Scalar(128,128,128), cv::Scalar(148,255,181), cv::Scalar(143,124,0), cv::Scalar(157,204,0), cv::Scalar(194,0,136), cv::Scalar(0,51,128), cv::Scalar(255,164,5), cv::Scalar(255,168,187), cv::Scalar(66,102,0), cv::Scalar(255,0,16), cv::Scalar(94,241,242), cv::Scalar(0,153,143), cv::Scalar(224,255,102), cv::Scalar(116,10,255), cv::Scalar(153,0,0), cv::Scalar(255,255,128), cv::Scalar(255,255,0), cv::Scalar(255,80,5) };
-	auto color = coolColors.begin();
-
 	for (auto el = Polyshapes.begin(); el != Polyshapes.end(); el++) {
 		
 		if ((*el)->AnyPointInRect(bounds)) {
-			(*el)->Draw(img, t, *color);
+			(*el)->Draw(img, t);
 		}
 
-		if (++color == coolColors.end())
-			color = coolColors.begin();
 	}
 
 	for (auto el = Polylines.begin(); el != Polylines.end(); el++) {

@@ -6,9 +6,12 @@ namespace VE {
 
 	class Polyshape : public VectorElement {
 	protected:
+		bool counterClockwise = true;
+
 		std::vector<Connection> connections;
-		bool valid;
+		bool valid = false;
 		std::vector<Point> points;
+		VE::ColorAreaPtr color = std::make_shared<ColorArea>();
 
 
 	public:
@@ -17,15 +20,21 @@ namespace VE {
 		Polyshape();
 
 		std::vector<Point>& getPoints();
+		VE::ColorAreaPtr getColor();
+		void setColor(VE::ColorAreaPtr&col);
 
 		void setConnections(std::vector<Connection>& connections);
-		std::vector<Connection>& getConnections();
+		const std::vector<Connection>& getConnections();
 
 		bool Valid() { return valid; };
 
-		void Draw(cv::Mat& img, Transform& t, const cv::Scalar &color);
+		void Draw(cv::Mat& img, Transform& t);
 		bool AnyPointInRect(Bounds& rect);
 
+	private:
+		void CalculateDirection();
+	public:
+		bool CounterClockwise();
 	};
 
 }

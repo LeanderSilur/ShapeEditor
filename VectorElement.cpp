@@ -61,7 +61,7 @@ namespace VE {
 			mask[i] = true;
 			Point pt = points[i];
 			
-			for (j = i + 1; j < points.size() - 1; j++) {
+			for (j = i + 1; j < (int)points.size() - 1; j++) {
 				Point diff = pt - points[j + 1];
 				float dist2 = diff.x * diff.x + diff.y * diff.y;
 				if (dist2 > maxDist2) {

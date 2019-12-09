@@ -33,8 +33,9 @@ public:
 	// than this value will be merged together in Polyline::Simplify()
 	float SIMPLIFY_MAX_DIST = 1.2f;
 
+	std::shared_ptr<VE::ColorArea> ActiveColor = std::make_shared<VE::ColorArea>();
 
-	VectorGraphic() {};
+	VectorGraphic() { ActiveColor->Color = cv::Scalar(120, 160, 140); };
 	
 
 	std::vector<VE::PolylinePtr> Polylines;
@@ -57,10 +58,20 @@ public:
 	void Delete(VE::PolylinePtr line);
 
 	// Shapes
+private:
+	void TraceSingleShape(std::vector<VE::Connection>& connections, VE::PolyshapePtr& result);
+public:
 	void CalcShapes();
-	bool CreateShape(const VE::Point& pt);
-	void DeleteShape(VE::PolyshapePtr shape);
-	void ColorShape(VE::ColorAreaPtr colorArea);
+	void ColorShapesRandom();
+	void SortShapes();
+private:
+	void SortShapes(std::vector<VE::PolyshapePtr> & shapes);
+
+public:
+	VE::PolyshapePtr CreateShape(const VE::Point & target);
+	VE::PolyshapePtr ColorShape(const VE::Point& pt);
+	void PickColor(const VE::Point& pt);
+	bool DeleteShape(const VE::Point& pt);
 
 
 
@@ -71,10 +82,10 @@ public:
 	void ClosestPolyline(VE::Bounds& b, float& distance2, const VE::Point& pt,
 		VE::Point& closest, VE::PolylinePtr& element);
 
-	void SmallestPolyshape(cv::Mat& img, VE::Transform& t, const VE::Point& pt,
-		VE::PolyshapePtr& element);
-	void SmallestPolyshape(VE::Bounds& b, const VE::Point& pt,
-		VE::PolyshapePtr& element);
+private: 
+	bool ClosestConnectionLeft(const VE::Point& target, std::vector<VE::PolylinePtr>& lines, VE::Connection& result);
+public:
+	void ClosestPolyshape(const VE::Point& pt, VE::PolyshapePtr& element);
 
 	void ClosestEndPoint(cv::Mat& img, VE::Transform& t, float& maxDist2, const VE::Point& pt, VE::Point& closest);
 	void ClosestEndPoint(VE::Bounds& b, float& maxDist2, const VE::Point& pt, VE::Point& closest);
