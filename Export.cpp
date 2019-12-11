@@ -3,7 +3,8 @@
 #include "Polyshape.h"
 #include <fstream>
 
-void ExportPoints(std::string path, std::string image_path, cv::Size2i shape, std::vector<std::vector<VE::Point>*>& lines, bool fill)
+void ExportPoints(std::string path, std::string image_path, cv::Size2i shape,
+	std::vector<const std::vector<VE::Point>*>& lines, std::vector<VE::PolyshapeData>& shapeDatas)
 {
 	std::ofstream savefile;
 	savefile.open(path, std::ios::out);
@@ -18,11 +19,10 @@ void ExportPoints(std::string path, std::string image_path, cv::Size2i shape, st
 				image - rendering: pixelated;
 			}
 			polyline{
-					stroke - width:0.5px;
-					stroke:#f00;
-)";
-	if (!fill) savefile << "		fill:none;\n";
-	savefile << R"(			}
+				stroke - width:0.5px;
+				stroke:#f00;
+				fill:none;
+			}
 		]]>
 	</style>)";
 
@@ -36,16 +36,30 @@ void ExportPoints(std::string path, std::string image_path, cv::Size2i shape, st
 		}
 		savefile << "' />\n";
 	}
+	for (auto& shapeData: shapeDatas)
+	{
+		savefile << "<shape data='";
+		for (auto& d: shapeData.data) {
+			savefile << d.first << "," << d.second << " ";
+		}
+		savefile << "' color='" << shapeData.color->Name << "," 
+			<< shapeData.color->Color[0] << ","
+			<< shapeData.color->Color[1] << ","
+			<< shapeData.color->Color[2] << "' "
+			<< "/>\n";
+	}
+
 	savefile << "</svg>";
 	savefile.close();
 }
-void Export::SaveSVG(std::string path, std::string image_path, cv::Size2i shape, std::vector<VE::PolylinePtr>& polylines)
+void Export::SaveSVG(std::string path, std::string image_path, cv::Size2i shape,
+	std::vector<VE::PolylinePtr>& polylines, std::vector<VE::PolyshapeData>& shapeData)
 {
-	std::vector<std::vector<VE::Point>*> lines;
+	std::vector<const std::vector<VE::Point>*> lines;
 	for (auto&pl:polylines)
 		lines.push_back(&pl->getPoints());
 
-	ExportPoints(path, image_path, shape, lines, false);
+	ExportPoints(path, image_path, shape, lines, shapeData);
 }
 
 
@@ -82,8 +96,8 @@ void Export::SaveSVG(std::string path, std::string image_path, cv::Size2i shape,
 		}
 		auto& col = ps->getColor();
 		savefile << "' fill=\"rgb("
-			<< col->Color[0] << ", " 
-			<< col->Color[1] << ", " 
+			<< col->Color[0] << ", "
+			<< col->Color[1] << ", "
 			<< col->Color[2] << ")\" name=\""
 			<< col->Name << "\" direction=\""
 			<< ps->CounterClockwise() << "\" />\n";

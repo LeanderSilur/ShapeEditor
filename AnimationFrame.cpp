@@ -38,31 +38,42 @@ bool replace(std::string& str, const std::string& from, const std::string& to) {
 bool Animation::Frame::Load(std::string line_path)
 {
 	std::string image_path(line_path);
+	replace(image_path, ".l.svg", "");
 	replace(image_path, ".svg", "");
 	return Load(image_path, line_path);
 }
 
 bool Animation::Frame::Load(std::string image_path, std::string line_path)
 {
+	std::cout << image_path << "\n";
+	std::cout << line_path << "\n";
 	if (VerifyPath(image_path)) {
 		image = cv::imread(image_path);
 		if (image.empty()) {
-			std::cout << "Error: Image is empty: " << image_path << "\n";
 			return false;
 		}
-		cv::cvtColor(image, image, CV_BGR2RGB);
+		cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
 	}
 	else {
 		return false;
 	}
 
-	if (VerifyPath(line_path))
-		vectorGraphic.LoadPolylines(line_path);
+	if (VerifyPath(line_path)) {
+		vectorGraphic.Load(line_path);
+	}
 	else 
 		return false;
 
 	name = std::filesystem::path(image_path).filename().string();
+	replace(line_path, ".l.svg", ".svg");
+	linePath = line_path;
 	return true;
+}
+
+bool Animation::Frame::Reload()
+{
+	if (VerifyPath(linePath))
+		return Load(linePath);
 }
 
 cv::Mat& Animation::Frame::getImage()
@@ -78,4 +89,14 @@ VectorGraphic& Animation::Frame::getVectorGraphic()
 const std::string& Animation::Frame::getName()
 {
 	return name;
+}
+
+std::string Animation::Frame::getEditName()
+{
+	return name + ".l.svg";
+}
+
+std::string Animation::Frame::getShapeName()
+{
+	return name + ".s.svg";
 }

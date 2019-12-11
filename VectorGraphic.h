@@ -17,38 +17,20 @@ private:
 
 	void DeleteConnections(VE::PolylinePtr ptr);
 public:
-	// Used in SnapEndpoints(). The distance2 of an endpoint to a
-	// potential intersection point.
-	float SNAPPING_DISTANCE2 = 4;
-	// Used in MergeConnected(). If two linesegments share an enpoint
-	// they can be connected if this angle isn't exceeded.
-	// PI * 0.5 ^= 90°
-	float MIN_MERGE_ANGLE = CV_PI * 0.75;
 
-	// Used in polyline smoothing.
-	int SMOOTHING_ITERATIONS = 10;
-	float SMOOTHING_LAMBDA = 0.5f;
-
-	// Used in polyline simplification. Points closer together
-	// than this value will be merged together in Polyline::Simplify()
-	float SIMPLIFY_MAX_DIST = 1.2f;
-
-	std::shared_ptr<VE::ColorArea> ActiveColor = std::make_shared<VE::ColorArea>();
-
-	VectorGraphic() { ActiveColor->Color = cv::Scalar(120, 160, 140); };
-	
+	VectorGraphic() { };
 
 	std::vector<VE::PolylinePtr> Polylines;
 	std::vector<VE::PolyshapePtr> Polyshapes;
 
 	void AddPolyline(std::vector<VE::Point>& pts);
-	void LoadPolylines(std::string path);
-	void SavePolylines(std::string path, std::string image_path, cv::Size2i shape);
+	void Load(std::string path);
+	void Save(std::string path, std::string image_path, cv::Size2i shape);
 	void SavePolyshapes(std::string path, std::string image_path, cv::Size2i shape);
 
-	void SnapEndpoints();
+	void SnapEndpoints(const float& snappingDistance2);
 	void RemoveOverlaps();
-	void MergeConnected();
+	void MergeConnected(const float& minMergeAngle);
 	void ComputeConnectionStatus();
 	void RemoveUnusedConnections();
 
@@ -68,9 +50,10 @@ private:
 	void SortShapes(std::vector<VE::PolyshapePtr> & shapes);
 
 public:
+	void ClearShapes();
 	VE::PolyshapePtr CreateShape(const VE::Point & target);
-	VE::PolyshapePtr ColorShape(const VE::Point& pt);
-	void PickColor(const VE::Point& pt);
+	VE::PolyshapePtr ColorShape(const VE::Point& pt, VE::ColorAreaPtr& color);
+	void PickColor(const VE::Point& pt, VE::ColorAreaPtr& color);
 	bool DeleteShape(const VE::Point& pt);
 
 
@@ -91,4 +74,5 @@ public:
 	void ClosestEndPoint(VE::Bounds& b, float& maxDist2, const VE::Point& pt, VE::Point& closest);
 
 	void Draw(cv::Mat & img, VE::Transform& t);
+	VE::Bounds getBounds();
 };

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "VectorElement.h"
-#include "opencv2/flann/miniflann.hpp"
+#include "PtTree.h"
 
 namespace VE {
 
@@ -16,8 +16,7 @@ namespace VE {
 		std::vector<Point> simplifiedPoints;
 		float simple_maxDist2 = -1;
 
-		cv::Mat_<float> features;
-		std::shared_ptr<cv::flann::Index> flannIndex;
+		PtTree tree;
 		float maxLength;
 
 		Polyline::LineStat status = LineStat::std;
@@ -34,22 +33,27 @@ namespace VE {
 			removeDoubles();
 			calcBounds(points);
 			calculateKDTree();
+			UpdateSimplifiedPoints();
 		};
 
 		void setPoints(std::vector<Point>& inputPoints);
-		Point& getPoint(const int& i) { return points[i]; };
-		std::vector<Point>& getPoints();
+		const Point& getPoint(const int& i) { return points[i]; };
+		const std::vector<Point>& getPoints();
+
 		const std::vector<Point>& getSimplified(float maxDist2);
+	private:
+		void UpdateSimplifiedPoints();
+	public:
 		inline float getMaxLength() { return maxLength; };
 
 		Polyline();
 		Polyline(std::vector<Point>& points);
 		~Polyline();
 
-		Point& Front() { return points.front(); };
-		Point& Back() { return points.back(); };
-		Point& Front1() { return points[1]; };
-		Point& Back1() { return points[points.size() - 2]; };
+		const Point& Front() { return points.front(); };
+		const Point& Back() { return points.back(); };
+		const Point& Front1() { return points[1]; };
+		const Point& Back1() { return points[points.size() - 2]; };
 
 		std::vector<Connection> ConnectFront;
 		std::vector<Connection> ConnectBack;

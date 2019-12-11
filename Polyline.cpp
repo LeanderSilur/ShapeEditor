@@ -57,11 +57,7 @@ namespace VE {
 
 	int Polyline::FlannLookupSingle(const VE::Point &pt, const float& maxDist2)
 	{
-		cv::Mat query = (cv::Mat_<float>(1, 2) << pt.x, pt.y);
-		cv::Mat indices, dists;
-		flannIndex->radiusSearch(query, indices, dists, maxDist2, 1, cv::flann::SearchParams(32));
-
-		return indices.at<int>(0);
+		return tree.nearest(pt, float(maxDist2));
 	}
 
 	void Polyline::setPoints(std::vector<Point>& inputPoints)
@@ -71,7 +67,7 @@ namespace VE {
 		Cleanup();
 	}
 
-	std::vector<Point>& Polyline::getPoints()
+	const std::vector<Point>& Polyline::getPoints()
 	{
 		return this->points;
 	}
@@ -79,35 +75,30 @@ namespace VE {
 	const std::vector<Point>& Polyline::getSimplified(float maxDist2)
 	{
 		if (simple_maxDist2 != maxDist2) {
-			simplifiedPoints = points;
-			SimplifyNth(simplifiedPoints, maxDist2);
+			UpdateSimplifiedPoints();
 			simple_maxDist2 = maxDist2;
 		}
 		return simplifiedPoints;
 	}
 
+	void Polyline::UpdateSimplifiedPoints()
+	{
+		simplifiedPoints = points;
+		SimplifyNth(simplifiedPoints, simple_maxDist2);
+	}
+
 	void Polyline::calculateKDTree()
 	{
-		// Clear the features matrix and the maximum length.
-		//Use floats!
-		features = cv::Mat_<float>(0, 2);
+		// Calculate the maximum length and set the points.
 		float maxLength2 = 0.f;
 
-
-		for (auto pt = points.begin(); pt != points.end(); pt++) {
-			if (pt != points.begin()) {
-				Point direction = *(pt - 1) - *pt;
-				float length2 = direction.x * direction.x + direction.y * direction.y;
-				maxLength2 = std::max(maxLength2, length2);
-			}
-
-			// Insert the point in the the KDTree.
-			cv::Mat row = (cv::Mat_<float>(1, 2) << pt->x, pt->y);
-			features.push_back(row);
+		for (auto pt = points.begin() + 1; pt != points.end(); pt++) {
+			Point direction = *(pt - 1) - *pt;
+			maxLength2 = std::max(maxLength2, direction.x * direction.x + direction.y * direction.y);
 		}
 
 		maxLength = std::sqrt(maxLength2);
-		flannIndex = std::make_shared<cv::flann::Index>(features, cv::flann::KDTreeIndexParams());
+		tree.setPoints(points);
 	}
 
 
@@ -228,67 +219,39 @@ namespace VE {
 
 	void Polyline::Closest2(const Point& from, float& distance2, Point& closest)
 	{
+		float maxDist2 = distance2 + maxLength * maxLength / 4 + EPSILON;
 
-		// The distance2 parameter is the squared maximum distance.
-		// cv::flann uses the squared distance, but I need to add
-		// maxLength/2  ^2
-		// TRUST ME!!!! I've checked this twice. Even though the param name is called radius.
-		float maxDistance = distance2 + maxLength * maxLength / 4 + EPSILON;
+		int index = tree.nearest(from, maxDist2);
+		if (index < 0) return;
 
-		cv::Mat query = (cv::Mat_<float>(1, 2) << from.x, from.y);
-		cv::Mat indices, dists;
-		flannIndex->radiusSearch(query, indices, dists, maxDistance, SEARCH_MAX_NEIGHBOURS,
-			cv::flann::SearchParams(SEARCH_FLANN_CHECKS));
-
-
-		// After potential segments have been found, check them against
-		// the point to line distance, which will usually be shorter
-		// than the distance between the vertex and the search_point.
-		for (int i = 0; i < SEARCH_MAX_NEIGHBOURS; i++) {
-
-			int index = indices.at<int>(i);
-			if (index < 0) {
-				// No (more) points found.
-				break;
-			}
-			if (index > 10000) {
-				std::cout << "index too large.\n";
-				throw std::invalid_argument(".......");
-			}
-			std::cout << "    ind++\n";
-
-			Point pointOnLine;
-			float distancePrev = FMAX;
-			float distanceNext = FMAX;
-			std::cout << "    pol++\n";
-			if (index > 0) {
-				std::cout << index << ", "<< points[index - 1] << ", " << points.size() << std::endl;
-				distancePrev = distancePointLine2(points[index], points[index - 1], from, pointOnLine);
-			}
-			if (index < (int)points.size() - 1) {
-				distanceNext = distancePointLine2(points[index], points[index + 1], from, pointOnLine);
-			}
-			std::cout << "    dNext++\n";
-
-			if (distance2 > std::min(distancePrev, distanceNext)) {
-				Point other;
-				if (distancePrev < distanceNext) {
-					distance2 = distancePrev;
-					other = points[index - 1];
-				}
-				else {
-					distance2 = distanceNext;
-					other = points[index + 1];
-				}
-				Point d1 = from - points[index];
-				Point d2 = from - other;
-				if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y)
-					closest = points[index];
-				else
-					closest = other;
-			}
+		Point pointOnLine;
+		float distancePrev = FMAX;
+		float distanceNext = FMAX;
+		if (index > 0) {
+			distancePrev = distancePointLine2(points[index], points[index - 1], from, pointOnLine);
 		}
-		std::cout << "    end\n";
+		if (index < (int)points.size() - 1) {
+			distanceNext = distancePointLine2(points[index], points[index + 1], from, pointOnLine);
+		}
+
+		if (distance2 > std::min(distancePrev, distanceNext)) {
+			Point other;
+			if (distancePrev < distanceNext) {
+				distance2 = distancePrev;
+				other = points[index - 1];
+			}
+			else {
+				distance2 = distanceNext;
+				other = points[index + 1];
+			}
+			Point d1 = from - points[index];
+			Point d2 = from - other;
+			if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y)
+				closest = points[index];
+			else
+				closest = other;
+		}
+
 	}
 
 	// Get the Index of the point closest to (param) pt

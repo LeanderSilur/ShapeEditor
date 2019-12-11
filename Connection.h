@@ -24,12 +24,12 @@ namespace VE {
 		Location at;
 
 		void Invert();
-		Point& StartPoint();
-		Point& EndPoint();
-		Point& StartPoint1();
-		Point& EndPoint1();
+		const Point& StartPoint();
+		const Point& EndPoint();
+		const Point& StartPoint1();
+		const Point& EndPoint1();
 		void AppendTo(std::vector<Point>& points, const int & removeLast);
 		void SortOther(std::vector<Connection>& others);
-		float AngleArea(Connection & other);
+		float AngleArea();
 	};
 }

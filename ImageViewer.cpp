@@ -9,6 +9,8 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 #include <filesystem>
 
 
@@ -21,7 +23,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 	setFocusPolicy(Qt::StrongFocus);
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	setMinimumSize(200, 200);
-	setMaximumSize(560, 720);
+	setMaximumSize(1024, 720);
 
 	setMouseTracking(true);
 	setAcceptDrops(true);
@@ -30,6 +32,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 	display = cv::Mat(cv::Size(width(), height()), CV_8UC3);
 	
 	transform.Reset();
+	ActiveColor->Color = cv::Scalar(120, 160, 140);
 
 	 //todo resizing
 	cv::Mat s = cv::Mat(cv::Size(width(), height()), CV_8UC3);
@@ -63,11 +66,18 @@ void ImageViewer::AddFrame(Animation::Frame& frame)
 void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
 {
 	auto cl = &QPushButton::clicked;
-
+	wMainMenu = se.menuTabWidget;
+	lInfoText = se.lInfoText;
+	lFrameText = se.lFrameText;
+	
+	QObject::connect(se.bFileDirectory,
+		cl, this, &ImageViewer::FileSetDirectory);
 	QObject::connect(se.bFileLoad,
 		cl, this, &ImageViewer::FileLoad);
 	QObject::connect(se.bFileSaveLines,
 		cl, this, &ImageViewer::FileSave);
+	QObject::connect(se.bFrameReload,
+		cl, this, &ImageViewer::ReloadFrame);
 	QObject::connect(se.bFramePrev,
 		cl, this, &ImageViewer::PrevFrame);
 	QObject::connect(se.bFrameNext,
@@ -91,8 +101,10 @@ void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
 		cl, this, &ImageViewer::ComputeConnectionStatus);
 	QObject::connect(se.bremoveUnused,
 		cl, this, &ImageViewer::RemoveUnusedConnections);
-	QObject::connect(se.bcalcShapes,
+	QObject::connect(se.bshapesCalc,
 		cl, this, &ImageViewer::CalcShapes);
+	QObject::connect(se.bshapesClear,
+		cl, this, &ImageViewer::ClearShapes);
 
 
 
@@ -125,22 +137,18 @@ bool ImageViewer::ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element)
 {
 	// Get the closest element and point to the mouse.
 	element = nullptr;
-	std::cout << "Getting closest.\n";
 	VE::Point mousePos = VEMousePosition();
 	transform.applyInv(mousePos);
 
-	std::cout << "mousepos.\n";
 	float maxDist = HIGHLIGHT_DISTANCE / transform.scale;
 	float maxDist2 = maxDist * maxDist;
 	float distance2 = maxDist2;
 
-	std::cout << "closest.\n";
 
 	vectorGraphic().ClosestPolyline(
 		display, transform, distance2,
 		mousePos, closest, element);
 
-	std::cout << "ret.\n";
 	return element != nullptr;
 }
 
@@ -156,27 +164,24 @@ void ImageViewer::DrawHighlight(const cv::Scalar & color)
 
 void ImageViewer::DrawHighlightPoints(const cv::Scalar & color)
 {
-	std::cout << "draw highlgih points\n";
 	VE::Point closestPt;
 	VE::PolylinePtr element;
 
 	if (ClosestLinePoint(closestPt, element)) {
-		std::cout << "got closest\n";
+		std::stringstream stream;
+		stream << std::fixed << std::setprecision(3) << closestPt.x << ", " << closestPt.y;
+		lInfoText->setText(stream.str().c_str());
+
 		transform.apply(closestPt);
-		std::cout << "    transformed\n";
 
 		cv::circle(display, closestPt, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
-		std::cout << "    circle\n";
 		element->Draw(display, transform, &color, true);
-		std::cout << "    el-Draw()\n";
 	}
 }
 
 void ImageViewer::DrawExamine()
 {
-	std::cout << "eaxmining\n";
 	DrawHighlightPoints(POLYLINE_EXAMINE);
-	std::cout << "finished examining\n";
 }
 
 void ImageViewer::DrawSplit()
@@ -305,33 +310,39 @@ void ImageViewer::ReleaseShapeColor(QMouseEvent* event)
 	transform.applyInv(pt);
 
 	if (event->button() == Qt::LeftButton) {
-		bool result = true;
-		if (CtrlPressed() || ShiftPressed()) {
-			if (CtrlPressed())
-				vectorGraphic().ActiveColor = std::make_shared<VE::ColorArea>(*vectorGraphic().ActiveColor);
-			auto& col = vectorGraphic().ActiveColor->Color;
-			int r = col[0],
-				g = col[1],
-				b = col[2];
+		if (AltPressed())
+			vectorGraphic().PickColor(pt, ActiveColor);
+		else {
+			bool result = true;
+			if (CtrlPressed() || ShiftPressed()) {
+				if (CtrlPressed())
+					ActiveColor = std::make_shared<VE::ColorArea>(*ActiveColor);
+				auto& col = ActiveColor->Color;
+				int r = col[0],
+					g = col[1],
+					b = col[2];
 
-			InputDialog d;
-			d.AddItem(vectorGraphic().ActiveColor->Name, "Name");
-			d.AddItem(r, "R", 0, 255);
-			d.AddItem(g, "G", 0, 255);
-			d.AddItem(b, "B", 0, 255);
+				InputDialog d;
+				d.AddItem(ActiveColor->Name, "Name");
+				d.AddItem(r, "R", 0, 255);
+				d.AddItem(g, "G", 0, 255);
+				d.AddItem(b, "B", 0, 255);
 
-			result = d.exec();
-			col[0] = r;
-			col[1] = g;
-			col[2] = b;
-		}
-		if (result) {
-			vectorGraphic().ColorShape(pt);
-			ShowMat();
+				result = d.exec();
+				col[0] = r;
+				col[1] = g;
+				col[2] = b;
+			}
+			if (result) {
+				auto& g = vectorGraphic();
+				g.ColorShape(pt, ActiveColor);
+				ShowMat();
+			}
 		}
 	}
 	if (event->button() == Qt::RightButton) {
-		vectorGraphic().PickColor(pt);
+		if (vectorGraphic().DeleteShape(pt))
+			ShowMat();
 	}
 }
 
@@ -349,7 +360,6 @@ void ImageViewer::ReleaseShapeDelete(QMouseEvent* event)
 
 void ImageViewer::ShowMat()
 {
-	std::cout << "gonna show\n";
 	typedef cv::Point3_<uint8_t> Pixel;
 	const float visibility = 0.20;
 	Pixel baseColor(80, 80, 80);
@@ -389,18 +399,14 @@ void ImageViewer::ShowMat()
 	// Draw the vector elements.
 	vectorGraphic().Draw(display, transform);
 
-	std::cout << "here2\n";
 
 	if (interactionDraw != nullptr) {
-		std::cout << "not a nullptr\n";
 		(this->*interactionDraw)();
 	}
-	std::cout << "interactionDraw\n";
 
 	// Finally, put the cv::Mat (image) on the QLabel.
 	QImage qimg(display.data, display.cols, display.rows, display.step, QImage::Format_RGB888);
 	this->setPixmap(QPixmap::fromImage(qimg));
-	std::cout << "done\n";
 }
 
 void ImageViewer::Frame(const VE::Bounds& bounds)
@@ -434,13 +440,11 @@ void ImageViewer::FrameSelected()
 
 void ImageViewer::FrameAll()
 {
-	if (sourceImage().empty())
+	if (vectorGraphic().Polylines.empty()
+		||sourceImage().empty())
 		return;
-	VE::Bounds bounds;
-	bounds.x0 = 0;
-	bounds.y0 = 0;
-	bounds.x1 = sourceImage().cols;
-	bounds.y1 = sourceImage().rows;
+	
+	VE::Bounds bounds = vectorGraphic().getBounds();
 	Frame(bounds);
 }
 
@@ -472,6 +476,11 @@ bool ImageViewer::ShiftPressed()
 	return QGuiApplication::keyboardModifiers() == Qt::ShiftModifier;
 }
 
+bool ImageViewer::AltPressed()
+{
+	return QGuiApplication::keyboardModifiers() == Qt::AltModifier;
+}
+
 void ImageViewer::mousePressEvent(QMouseEvent * event)
 {
 	// TODO differentiate this
@@ -479,6 +488,12 @@ void ImageViewer::mousePressEvent(QMouseEvent * event)
 		mousePressPos = event->pos();
 		mousePrevPos = event->pos();
 		lmbHold = true;
+	}
+	else if (event->button() == Qt::ForwardButton) {
+		NextFrame(true);
+	}
+	else if (event->button() == Qt::BackButton) {
+		PrevFrame(true);
 	}
 }
 
@@ -525,7 +540,7 @@ void ImageViewer::dropEvent(QDropEvent* e)
 		Animation::Frame frame;
 		if (frame.Load(fileName.toStdString())) {
 			frames.push_back(frame);
-			activeFrame = frames.size() - 1;
+			frameIndex = frames.size() - 1;
 			ShowMat();
 		}
 		break;
@@ -550,7 +565,20 @@ void ImageViewer::resizeEvent(QResizeEvent* event)
 }
 void ImageViewer::keyPressEvent(QKeyEvent* event)
 {
-	if (event->key() == Qt::Key_F) FrameSelected();
+	if (event->modifiers() == Qt::Modifier::CTRL &&
+		event->key() == Qt::Key_O) FileLoad(true);
+	else if (event->modifiers() == Qt::Modifier::CTRL &&
+		event->key() == Qt::Key_S) FileSave(true);
+	else if (event->modifiers() == Qt::Modifier::CTRL &&
+		event->key() == Qt::Key_S) FileSave(true);
+	else if (event->modifiers() == Qt::Modifier::ALT && 
+		event->key() == Qt::Key_S) ClearShapes(true);
+	else if (event->key() == Qt::Key_S) CalcShapes(true);
+
+	else if (event->key() == Qt::Key_R &&
+		event->modifiers() == Qt::Modifier::CTRL) ReloadFrame(true);
+
+	else if (event->key() == Qt::Key_F) FrameSelected();
 	else if (event->key() == Qt::Key_A) FrameAll();
 	else if (event->key() == Qt::Key_Home) FrameTrue();
 
@@ -564,16 +592,18 @@ void ImageViewer::keyPressEvent(QKeyEvent* event)
 	else if (event->key() == Qt::Key_D) ComputeConnectionStatus(true);
 	else if (event->key() == Qt::Key_Delete ||
 		event->key() == Qt::Key_Backspace) RemoveUnusedConnections(true);
-	else if (event->key() == Qt::Key_S) CalcShapes(true);
 
-	else if (event->key() == Qt::Key_O
-		&& event->modifiers() == Qt::Modifier::CTRL) FileLoad(true);
-	else if (event->key() == Qt::Key_S
-		&& event->modifiers() == Qt::Modifier::CTRL) FileSave(true);
 	else if (event->key() == Qt::Key_Right) NextFrame(true);
-	else if (event->key() == Qt::Key_Left) PrevFrame(true);
+	else if (event->key() == Qt::Key_Left) PrevFrame	(true);
 
-
+	else if (event->modifiers() == Qt::KeypadModifier) {
+		if (event->key() == Qt::Key_1)
+			wMainMenu->setCurrentIndex(0);
+		if (event->key() == Qt::Key_2)
+			wMainMenu->setCurrentIndex(1);
+		if (event->key() == Qt::Key_3)
+			wMainMenu->setCurrentIndex(2);
+	}
 	else if (event->key() == Qt::Key_1) interactionButtons[InteractionMode::Examine]->click();
 	else if (event->key() == Qt::Key_2) interactionButtons[InteractionMode::Split]->click();
 	else if (event->key() == Qt::Key_3) interactionButtons[InteractionMode::Connect]->click();
@@ -585,8 +615,23 @@ void ImageViewer::keyPressEvent(QKeyEvent* event)
 
 void ImageViewer::SnapEndpoints(bool checked)
 {
-	vectorGraphic().SnapEndpoints();
-	ShowMat();
+	bool result = true;
+
+	if (CtrlPressed()) {
+		SNAPPING_DISTANCE2 = std::sqrt(SNAPPING_DISTANCE2);
+		InputDialog d;
+		d.AddItem(SNAPPING_DISTANCE2, "Snapping Distance", 0, 100);
+		result = d.exec();
+		SNAPPING_DISTANCE2 = SNAPPING_DISTANCE2 * SNAPPING_DISTANCE2;
+	}
+
+	if (result) {
+		vectorGraphic().SnapEndpoints(SNAPPING_DISTANCE2);
+		ShowMat();
+	}
+	else {
+		std::cout << "Cancelled Merge.\n";
+	}
 }
 
 void ImageViewer::RemoveOverlaps(bool checked)
@@ -600,7 +645,7 @@ void ImageViewer::MergeConnected(bool checked)
 	bool result = true;
 
 	if (CtrlPressed()) {
-		float& angle = vectorGraphic().MIN_MERGE_ANGLE;
+		float& angle = MIN_MERGE_ANGLE;
 		angle *= 180 / CV_PI;
 
 		InputDialog d;
@@ -611,7 +656,7 @@ void ImageViewer::MergeConnected(bool checked)
 	}
 
 	if (result) {
-		vectorGraphic().MergeConnected();
+		vectorGraphic().MergeConnected(MIN_MERGE_ANGLE);
 		ShowMat();
 	}
 	else {
@@ -625,13 +670,13 @@ void ImageViewer::Simplify(bool checked)
 
 	if (CtrlPressed()) {
 		InputDialog d;
-		d.AddItem(vectorGraphic().SIMPLIFY_MAX_DIST, "Maximum Merge Distance", 0, 500);
+		d.AddItem(SIMPLIFY_MAX_DIST, "Maximum Merge Distance", 0, 500);
 		result = d.exec();
 	}
 
 	if (result) {
 		for (VE::PolylinePtr& p : vectorGraphic().Polylines) {
-			p->Simplify(vectorGraphic().SIMPLIFY_MAX_DIST);
+			p->Simplify(SIMPLIFY_MAX_DIST);
 			p->Cleanup();
 		}
 		ShowMat();
@@ -647,14 +692,14 @@ void ImageViewer::Smooth(bool checked)
 
 	if (CtrlPressed()) {
 		InputDialog d;
-		d.AddItem(vectorGraphic().SMOOTHING_ITERATIONS, "Iterations", 0, 100);
-		d.AddItem(vectorGraphic().SMOOTHING_LAMBDA, "Lambda", 0.f, 1.f);
+		d.AddItem(SMOOTHING_ITERATIONS, "Iterations", 0, 100);
+		d.AddItem(SMOOTHING_LAMBDA, "Lambda", 0.f, 1.f);
 		result = d.exec();
 	}
 
 	if (result) {
 		for (VE::PolylinePtr& p : vectorGraphic().Polylines) {
-			p->Smooth(vectorGraphic().SMOOTHING_ITERATIONS, vectorGraphic().SMOOTHING_LAMBDA);
+			p->Smooth(SMOOTHING_ITERATIONS, SMOOTHING_LAMBDA);
 			p->Cleanup();
 		}
 		ShowMat();
@@ -666,16 +711,13 @@ void ImageViewer::Smooth(bool checked)
 
 void ImageViewer::BasicCleanup(bool checked)
 {
-	vectorGraphic().SnapEndpoints();
-	vectorGraphic().RemoveOverlaps();
-	vectorGraphic().MergeConnected();
-
-
-	for (VE::PolylinePtr& p : vectorGraphic().Polylines) p->Simplify(vectorGraphic().SIMPLIFY_MAX_DIST);
-	for (VE::PolylinePtr& p : vectorGraphic().Polylines) p->Smooth(vectorGraphic().SMOOTHING_ITERATIONS, vectorGraphic().SMOOTHING_LAMBDA);
+	for (VE::PolylinePtr& p : vectorGraphic().Polylines) p->Simplify(SIMPLIFY_MAX_DIST);
+	vectorGraphic().MergeConnected(MIN_MERGE_ANGLE);
+	for (VE::PolylinePtr& p : vectorGraphic().Polylines) p->Smooth(SMOOTHING_ITERATIONS, SMOOTHING_LAMBDA);
 	for (VE::PolylinePtr& p : vectorGraphic().Polylines) p->Cleanup();
 
 	vectorGraphic().ComputeConnectionStatus();
+	ShowMat();
 }
 
 void ImageViewer::ComputeConnectionStatus(bool checked)
@@ -697,19 +739,32 @@ void ImageViewer::CalcShapes(bool checked)
 	ShowMat();
 }
 
+void ImageViewer::ClearShapes(bool checked)
+{
+	vectorGraphic().ClearShapes();
+	ShowMat();
+}
+
+void ImageViewer::ReloadFrame(bool checked)
+{
+	activeFrame().Reload();
+	ShowMat();
+}
+
 void ImageViewer::NextFrame(bool checked)
 {
-	std::cout << "nextframe "<< activeFrame;
-	if (activeFrame + 1 < frames.size())
-		activeFrame++;
+	if (frameIndex + 1 < frames.size())
+		frameIndex++;
+
+	lFrameText->setText(QString(frameIndex + 1) + " / " + QString((int)frames.size()));
 	ShowMat();
 }
 
 void ImageViewer::PrevFrame(bool checked)
 {
-	std::cout << "prevframe " << activeFrame;
-	if (activeFrame - 1 >= 0)
-		activeFrame--;
+	if (frameIndex - 1 >= 0)
+		frameIndex--;
+	lFrameText->setText(QString(frameIndex + 1) + " / " + QString((int)frames.size()));
 	ShowMat();
 }
 
@@ -765,8 +820,8 @@ void ImageViewer::ctShapeDelete(bool checked)
 void ImageViewer::FileLoad(bool checked)
 {
 	QStringList fileNames = QFileDialog::getOpenFileNames(this,
-		QString("Choose a .svg with matching .png"), "D:/190725_sequence_colorization/files",
-		QString("Lineart (*.svg)"));
+		QString("Choose a .svg with matching .png"), WORKING_DIRECTORY.c_str(),
+		QString("Edited Lineart (*.png.l.svg);;Lineart (*.png.svg)"));
 
 	decltype(frames) newFrames;
 	for (size_t i = 0; i < fileNames.size(); i++)
@@ -778,7 +833,7 @@ void ImageViewer::FileLoad(bool checked)
 		}
 	}
 	if (!newFrames.empty()) {
-		activeFrame = 0;
+		frameIndex = 0;
 		frames = newFrames;
 	}
 	
@@ -797,27 +852,38 @@ void ImageViewer::FileSave(bool checked)
 
 
 	std::string directoryName = QFileDialog::getExistingDirectory(this, "Select Save Directory",
-		"D:/190725_sequence_colorization/files").toStdString();
+		WORKING_DIRECTORY.c_str()).toStdString();
 	
 	auto directory = std::filesystem::path(directoryName);
 	if (!std::filesystem::is_directory(directory))
 		return;
 
 	
-	for (auto&frame:frames)
+	for (Animation::Frame&frame:frames)
 	{
-		
-		auto path = directory / frame.getName();
+
+		auto path_l = directory / frame.getEditName();
+		auto path_s = directory / frame.getShapeName();
 
 		if (FILE_SAVE_LINES) {
-			auto pathLine = path.string() + "_lines.svg";
-			vectorGraphic().SavePolylines(pathLine, "", cv::Size2i(sourceImage().cols, sourceImage().rows));
+			
+			frame.getVectorGraphic().Save(path_l.string(), "", cv::Size2i(sourceImage().cols, sourceImage().rows));
 		}
 		if (FILE_SAVE_SHAPES) {
-			auto pathShape = path.string() + "_shapes.svg";
-			vectorGraphic().SavePolyshapes(pathShape, "", cv::Size2i(sourceImage().cols, sourceImage().rows));
+			frame.getVectorGraphic().SavePolyshapes(path_s.string(), "", cv::Size2i(sourceImage().cols, sourceImage().rows));
 		}
 
 	}
+
+}
+
+void ImageViewer::FileSetDirectory(bool checked)
+{
+	std::string directoryName = QFileDialog::getExistingDirectory(this, "Select Working Directory",
+		WORKING_DIRECTORY.c_str()).toStdString();
+
+	auto directory = std::filesystem::path(directoryName);
+	if (std::filesystem::is_directory(directory))
+		WORKING_DIRECTORY = directoryName;
 
 }

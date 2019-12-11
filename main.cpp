@@ -7,10 +7,29 @@
 #include "InputDialog.h"
 
 #include <filesystem>
+#include "PtTree.h"
 
 int main(int argc, char* argv[])
 {
-	std::cout << std::filesystem::current_path();
+	/*
+	PtTree tree;
+	std::vector<VE::Point> points = {
+		VE::Point(0, 0),
+		VE::Point(1, 1),
+		VE::Point(2, 2),
+		VE::Point(3, 3),
+		VE::Point(4, 2),
+		VE::Point(5, 1),
+		VE::Point(6, 0)
+	};
+	tree.setPoints(points);
+
+	float dist2 = 0;
+	int i = tree.nearest(VE::Point(2, 2), dist2);
+
+	return 0;
+	*/
+	 
 	QApplication a(argc, argv);
 
 

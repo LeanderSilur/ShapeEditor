@@ -1,6 +1,6 @@
 #include "Connection.h"
-
 #include "Polyline.h"
+#include <iostream>
 
 namespace VE {
 	Connection::Connection()
@@ -20,26 +20,26 @@ namespace VE {
 		else at = Location::start;
 	}
 
-	Point& Connection::StartPoint() {
+	const Point& Connection::StartPoint() {
 		if (at == Location::start)
 			return polyline->Front();
 		return polyline->Back();
 	}
 
-	Point& Connection::EndPoint() {
+	const Point& Connection::EndPoint() {
 		if (at == Location::start)
 			return polyline->Back();
 		return polyline->Front();
 	}
 
-	Point& Connection::StartPoint1()
+	const Point& Connection::StartPoint1()
 	{
 		if (at == Location::start)
 			return polyline->Front1();
 		return polyline->Back1();
 	}
 
-	Point& Connection::EndPoint1()
+	const Point& Connection::EndPoint1()
 	{
 		if (at == Location::start)
 			return polyline->Back1();
@@ -89,21 +89,19 @@ namespace VE {
 		}
 		others = std::move(sorted);
 	}
-	float Connection::AngleArea(Connection& other)
-	{
-		float endAngle = (other.StartPoint1().x - other.StartPoint().x) *
-			(other.StartPoint1().y + other.StartPoint().y);
-		
-		float angle = 0;
 
-		std::vector<VE::Point>& points = polyline->getPoints();
+	float Connection::AngleArea()
+	{
+		float angle = 0;
+		const std::vector<VE::Point>& points = polyline->getPoints();
+
 		for (auto it = points.begin() + 1; it != points.end(); it++)
 		{
 			angle += ((*it).x - (*(it - 1)).x) * ((*it).y + (*(it - 1)).y);
 		}
-
 		if (at == Location::end)
 			angle = -angle;
-		return endAngle + angle;
+
+		return angle;
 	}
 }

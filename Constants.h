@@ -2,6 +2,7 @@
 #include <limits>
 #include <vector>
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 
 namespace VE {
 
@@ -12,10 +13,9 @@ namespace VE {
 
 
 	// B
-	const float MIN_DRAWING_DISTANCE = 16.0;
-	const float MIN_DRAWING_AREA = 2.0;
+	const float MIN_DRAWING_DISTANCE = 8.0;
+	//const float MIN_DRAWING_AREA = 2.0;
 	const float MIN_DRAWING_DISTANCE2 = MIN_DRAWING_DISTANCE * MIN_DRAWING_DISTANCE;
-
 
 	// Polyline drawing options
 	const int POLYLINE_LINETYPE = cv::LINE_AA;
@@ -37,14 +37,14 @@ namespace VE {
 
 	// Flannindex search options
 	const int SEARCH_MAX_NEIGHBOURS = 10;
-	const int SEARCH_FLANN_CHECKS = 12; // default 32
-
+	const int SEARCH_FLANN_CHECKS = 64; // default 32
 
 
 	// typedefs
 	typedef cv::Point2f Point;
 	class Polyline;
 	class Polyshape;
+	class PolyshapeData;
 	class ColorArea;
 	typedef std::shared_ptr<Polyline> PolylinePtr;
 	typedef std::shared_ptr<Polyshape> PolyshapePtr;

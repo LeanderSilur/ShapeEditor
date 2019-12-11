@@ -1,9 +1,8 @@
 #include "Polyshape.h"
-
-#include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 #include "Polyline.h"
+#include "Connection.h"
 #include "ColorArea.h"
 
 
@@ -23,6 +22,31 @@ namespace VE {
 
 	Polyshape::Polyshape()
 	{
+	}
+
+	VE::PolyshapePtr Polyshape::FromData(std::vector<PolylinePtr>& lines, PolyshapeData& shapeData)
+	{
+		PolyshapePtr ptr = std::make_shared<Polyshape>();
+
+		std::vector<Connection> connections;
+		for (auto& p : shapeData.data) {
+			if (p.first >= lines.size() || p.second < 0 || p.second > 1) {
+				return nullptr;
+			}
+
+			Connection con(lines[p.first], (VE::Connection::Location)p.second);
+			connections.push_back(con);
+		}
+
+		try {
+			ptr->setConnections(connections);
+		}
+		catch (const std::logic_error & e) {
+			return nullptr;
+		}
+		ptr->setColor(shapeData.color);
+		ptr->Cleanup();
+		return ptr;
 	}
 
 	std::vector<Point>& Polyshape::getPoints()
@@ -52,7 +76,7 @@ namespace VE {
 		for (auto con = connections.begin() + 1; con != connections.end(); con++)
 		{
 			if ((con - 1)->EndPoint() != con->StartPoint()) {
-				throw std::invalid_argument("Not gud.");
+				throw std::logic_error("Last point is not the same as first");
 			}
 		}
 
@@ -111,10 +135,10 @@ namespace VE {
 
 	void Polyshape::CalculateDirection()
 	{
-		float angle = connections.back().AngleArea(connections.front());
-		for (int i = 0; i < (int)connections.size() - 1; i++) {
-			angle += connections[i].AngleArea(connections[i + 1]);
-		}
+		float angle = 0;
+		for (auto&con:connections)
+			angle += con.AngleArea();
+
 		counterClockwise = angle > 0;
 	}
 
