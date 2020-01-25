@@ -61,7 +61,8 @@ namespace VE {
 		void Simplify(const float& maxDist);
 		void Smooth(const int& iterations = 10, const float& lambda = 0.5);
 
-		void UpdateStatus() { status = getStatus(); };
+		void UpdateStatus() { status = getStatus(); }
+		void ResetStatus() { status = LineStat::std; };
 		LineStat Status() { return status; };
 
 		void Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride = nullptr, bool circles = false);

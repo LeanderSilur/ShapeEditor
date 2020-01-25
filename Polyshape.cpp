@@ -44,7 +44,7 @@ namespace VE {
 		catch (const std::logic_error & e) {
 			return nullptr;
 		}
-		ptr->setColor(shapeData.color);
+		ptr->setColor(shapeData.colorArea);
 		ptr->Cleanup();
 		return ptr;
 	}

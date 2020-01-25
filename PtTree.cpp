@@ -118,6 +118,54 @@ void nextNearest(const VE::Point& target, PtTreeNode* current, int& index, float
 
 }
 
+void kNextNearest(const VE::Point& target, PtTreeNode* current, float& maxDist2, int&maxIndex, const int&amount, int* indices, float* distances2, bool xy) {
+
+	float currentDist2 = getDist2(target, current);
+
+	std::cout << "\n" << maxDist2;
+	if (currentDist2 < maxDist2) {
+		// Replace the maximum.
+		indices[maxIndex] = current->index;
+		distances2[maxIndex] = currentDist2;
+
+		// Update the maximum distance.
+		maxIndex = 0;
+		float newMaxDist2 = distances2[0];
+		for (int i = 1; i < amount; i++)
+		{
+			if (distances2[i] > distances2[maxIndex]) {
+				maxIndex = i;
+				newMaxDist2 = distances2[i];
+			}
+		}
+		maxDist2 = newMaxDist2;
+	}
+
+
+	xy = !xy;
+
+	bool leftFirst = Value(target, xy) < Value(current, xy);
+
+	if (leftFirst) {
+		if (current->left != nullptr)
+			kNextNearest(target, current->left, maxDist2, maxIndex, amount, indices, distances2, xy);
+
+		if (Value(target, xy) + std::sqrt(maxDist2) > Value(current, xy))
+			if (current->right != nullptr)
+				kNextNearest(target, current->right, maxDist2, maxIndex, amount, indices, distances2, xy);
+	}
+	else {
+		if (current->right != nullptr)
+			kNextNearest(target, current->right, maxDist2, maxIndex, amount, indices, distances2, xy);
+
+		if (Value(target, xy) - std::sqrt(maxDist2) < Value(current, xy))
+			if (current->left != nullptr)
+				kNextNearest(target, current->left, maxDist2, maxIndex, amount, indices, distances2, xy);
+	}
+}
+
+
+
 
 int PtTree::nearest(const VE::Point& target, float& maxDist2)
 {
@@ -129,4 +177,20 @@ int PtTree::nearest(const VE::Point& target, float& maxDist2)
 	nextNearest(target, root, index, maxDist2, false);
 
 	return index;
+}
+
+
+void PtTree::kNearest(const VE::Point& target, float& maxDist2, int* indices, float * distances2, const int& amount)
+{
+	if (root == nullptr) {
+		throw std::logic_error("The PtTree must be populated before a lookup.");
+	}
+	
+	for (int i = 0; i < amount; i++) {
+		distances2[i] = maxDist2;
+		indices[i] = -1;
+	}
+
+	int maxIndex = 0;
+	kNextNearest(target, root, maxDist2, maxIndex, amount, indices, distances2, false);
 }

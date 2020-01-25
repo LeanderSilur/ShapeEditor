@@ -4,9 +4,8 @@
 
 #include <opencv2/core.hpp>
 #include <QtWidgets>
-
+#include "ShapeEditor.h"
 #include "VectorGraphic.h"
-#include "ui_ShapeEditor.h"
 #include "AnimationFrame.h"
 
 class ImageViewer : public QLabel
@@ -19,7 +18,7 @@ public:
 	ImageViewer(QWidget* parent = nullptr);
 
 	void AddFrame(Animation::Frame &frame);
-	void ConnectUi(Ui_ShapeEditor& se);
+	void ConnectUi(ShapeEditor& se);
 
 private:
 	// Used in SnapEndpoints(). The distance2 of an endpoint to a
@@ -51,7 +50,7 @@ private:
 	const cv::Scalar POLYLINE_CONNECT_LINE = cv::Scalar(60, 150, 100);
 	const cv::Scalar POLYLINE_DELETE = cv::Scalar(255, 0, 0);
 
-	std::string WORKING_DIRECTORY = "D:/190725_sequence_colorization/files/kellnerin/tresholded";
+	std::string WORKING_DIRECTORY = "D:/190725_sequence_colorization/files/malila/rgb";
 
 	VE::Transform transform;
 	std::vector<Animation::Frame> frames;
@@ -121,7 +120,6 @@ private:
 	InteractionMode mode = InteractionMode::Examine;
 
 protected:
-	void keyPressEvent(QKeyEvent* event);
 	void mousePressEvent(QMouseEvent * event);
 	void mouseMoveEvent(QMouseEvent * event);
 	void mouseReleaseEvent(QMouseEvent * event);
@@ -132,6 +130,7 @@ protected:
 	void resizeEvent(QResizeEvent* event);
 
 public slots:
+	void keyPressEvent(QKeyEvent* event);
 	void SnapEndpoints(bool checked);
 	void RemoveOverlaps(bool checked);
 	void MergeConnected(bool checked);

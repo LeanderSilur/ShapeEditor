@@ -45,8 +45,6 @@ bool Animation::Frame::Load(std::string line_path)
 
 bool Animation::Frame::Load(std::string image_path, std::string line_path)
 {
-	std::cout << image_path << "\n";
-	std::cout << line_path << "\n";
 	if (VerifyPath(image_path)) {
 		image = cv::imread(image_path);
 		if (image.empty()) {

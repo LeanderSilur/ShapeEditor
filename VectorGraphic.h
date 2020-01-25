@@ -36,7 +36,7 @@ public:
 
 	// Lines
 	void Split(VE::PolylinePtr pl, VE::Point pt);
-	void Connect(VE::Connection& a, VE::Connection& b);
+	//void Connect(VE::Connection& a, VE::Connection& b);
 	void Delete(VE::PolylinePtr line);
 
 	// Shapes
@@ -55,6 +55,8 @@ public:
 	VE::PolyshapePtr ColorShape(const VE::Point& pt, VE::ColorAreaPtr& color);
 	void PickColor(const VE::Point& pt, VE::ColorAreaPtr& color);
 	bool DeleteShape(const VE::Point& pt);
+
+	void MakeColorsUnique();
 
 
 

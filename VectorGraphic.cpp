@@ -5,6 +5,7 @@
 #include "Export.h"
 
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <fstream>
 
@@ -42,8 +43,9 @@ std::vector<Connection> VectorGraphic::GetConnections(const VE::Point& pt, const
 		Connection connection;
 		connection.polyline = polyline;
 
-		if (polyline->Front() == polyline->Back()) {
-			// Don't use loops.
+		if (polyline->Front() == polyline->Back() 
+			|| polyline->Status() == Polyline::LineStat::invalid) {
+			// Don't use loops or invalid lines.
 			continue;
 		}
 		if ((*polyline).Front() == pt) {
@@ -125,135 +127,101 @@ void VectorGraphic::DeleteConnections(VE::PolylinePtr ptr)
 
 
 const char* quotationMark = "\"'";
-// Parse points from svg line.
-void getPoints(std::vector<VE::Point>& points, std::string line)
-{
+const char* whitespace = "\t ";
+const char* alphabetic = "abcdefghijklmnopqrstuvwxyz";
+const char* numeric = "0123456789";
+const char* numericDot = "0123456789.";
+void parseXML(std::map<std::string, std::string>& attributes, std::string& line) {
+	attributes.clear();
+
 	if (line.length() == 0) return;
-
-	std::string openingTag = "<polyline points=";
-	size_t start = line.find(openingTag);
-	if (start == std::string::npos) return;
-
-	// get the separating character
-	start = line.find_first_not_of(" \t", openingTag.size() + start);
-	if (start == std::string::npos) return;
-
-	// check that the separator is a quotation mark
-	if (line.find_first_of(quotationMark, start) != start) return;
-
-	// get next quotation mark
-	size_t end = line.find(line.substr(start, 1), start + 1);
-	if (end == start || end == std::string::npos) return;
-
-	//verify number sequence
-	size_t unidentified = line.find_first_not_of("0123456789,. \t", start + 1);
-	if (unidentified != end) {
-		std::cout << "Invalid tag." << start << " " << unidentified << "\n";
+	size_t tag_open = line.find("<");
+	size_t tagName_start = line.find_first_of(alphabetic, tag_open);
+	size_t tagName_end = line.find_first_not_of(alphabetic, tagName_start);
+	size_t tag_close = line.find(">", tagName_end);
+	if (tag_open == std::string::npos || tag_close == std::string::npos || 
+		tagName_start == std::string::npos || tagName_end == std::string::npos)
 		return;
+
+	attributes.insert(std::make_pair(std::string("tag"), line.substr(tagName_start, tagName_end - tagName_start)));
+	
+	size_t nextAttr = tagName_end;
+	while(nextAttr < line.size()) {
+		if (line.find_first_of(whitespace, nextAttr, 1) == nextAttr) return;
+		size_t attr_start = line.find_first_of(alphabetic, nextAttr);
+		size_t attr_end = line.find_first_not_of(alphabetic, attr_start);
+		size_t equals_sign = line.find("=", attr_end);
+		size_t content_start = line.find_first_of(quotationMark, equals_sign);
+		if (content_start == std::string::npos)
+			return;
+		std::string delimiter = line.substr(content_start, 1);
+		size_t content_end = line.find(delimiter, content_start + 1);
+
+		if (content_end == std::string::npos)
+			return;
+		attributes.insert(std::make_pair(
+			line.substr(attr_start, attr_end - attr_start),
+			line.substr(content_start + 1, content_end - content_start - 1)
+		));
+		nextAttr = content_end + 1;
 	}
-	size_t pos = start + 1;
-	size_t commaPos,
-		spacePos;
-
-
-	while (pos < end) {
-		commaPos = line.find(',', pos);
-		if (commaPos == std::string::npos) return;
-
-		spacePos = line.find(' ', commaPos + 1);
-		if (spacePos >= end)
-			spacePos = end;
-
-		VE::Point pt;
-		pt.x = std::atof(line.substr(pos, commaPos - pos).c_str());
-		pt.y = std::atof(line.substr(commaPos + 1, spacePos - commaPos - 1).c_str());
-		points.push_back(pt);
-		pos = spacePos;
-	}
-
 }
 
-// Parse shapes from svg line.
-void getSvgShapes(VE::PolyshapeData& shapeData, std::string line)
-{
-	if (line.length() == 0) return;
+void parseFloatPairs(std::vector<VE::Point>& points, std::string& line) {
+	points.clear();
 
-	std::string openingTag = "<shape data=";
-	size_t start = line.find(openingTag);
-	if (start == std::string::npos) return;
+	size_t pair_start = 0;
+	while (true) {
+		pair_start = line.find_first_not_of(whitespace, pair_start);
+		size_t pair_comma = line.find(",", pair_start);
+		size_t pair_end = line.find_first_of(whitespace, pair_comma);
+		if (pair_end == std::string::npos)
+			return;
 
-	// get the separating character
-	start = line.find_first_not_of(" \t", openingTag.size() + start);
-	if (start == std::string::npos) return;
-
-	// check that the separator is a quotation mark
-	if (line.find_first_of(quotationMark, start) != start) return;
-
-	// get next quotation mark
-	size_t end = line.find(line.substr(start, 1), start + 1);
-	if (end == start || end == std::string::npos) return;
-
-	//verify number sequence
-	size_t unidentified = line.find_first_not_of("0123456789, \t", start + 1);
-	if (unidentified != end) {
-		std::cout << "Invalid tag." << start << " " << unidentified << "\n";
-		return;
+		VE::Point pt;
+		pt.x = std::atof(line.substr(pair_start, pair_comma - pair_start).c_str());
+		pt.y = std::atof(line.substr(pair_comma + 1, pair_end - pair_comma - 1).c_str());
+		points.push_back(pt);
+		pair_start = pair_end + 1;
 	}
-	size_t pos = start + 1;
-	size_t commaPos,
-		spacePos;
+}
 
+void parseIntPairs(std::vector<std::pair<int, int>>& pairs, std::string& line) {
+	pairs.clear();
+	size_t pair_start = 0;
+	while (true) {
+		pair_start = line.find_first_not_of(whitespace, pair_start);
+		size_t pair_comma = line.find(",", pair_start);
+		size_t pair_end = line.find_first_of(whitespace, pair_comma);
+		if (pair_end == std::string::npos)
+			return;
 
-	while (pos < end - 1) {
-		commaPos = line.find(',', pos);
-		if (commaPos == std::string::npos) return;
-
-		spacePos = line.find(' ', commaPos + 1);
-		if (spacePos >= end)
-			spacePos = end;
-
-		std::string si = line.substr(pos, commaPos - pos);
-		std::string sj = line.substr(commaPos + 1, spacePos - commaPos - 1);
-		int i = std::atoi(si.c_str());
-		int j = std::atof(sj.c_str());
-		shapeData.data.push_back(std::pair<int, int>(i, j));
-		pos = spacePos;
+		int a = std::atoi(line.substr(pair_start, pair_comma - pair_start).c_str());
+		int b = std::atoi(line.substr(pair_comma + 1, pair_end - pair_comma - 1).c_str());
+		pairs.push_back(std::pair<int, int>(a, b));
+		pair_start = pair_end + 1;
 	}
-	// Look for ColorInfo
-	openingTag = "color=";
-	start = line.find(openingTag, end);
-	if (start == std::string::npos) return;
+}
 
-	start = line.find_first_not_of(" \t", openingTag.size() + start);
-	if (start == std::string::npos) return;
+void parseIntChain(std::vector<int>& chain, std::string& line) {
+	chain.clear();
+	size_t int_start = 0;
+	while (true) {
+		int_start = line.find_first_of(numeric, int_start);
+		size_t int_end = line.find_first_not_of(numeric, int_start);
 
-	// check that the separator is a quotation mark
-	if (line.find_first_of(quotationMark, start) != start) return;
-
-	// get next quotation mark
-	end = line.find(line.substr(start, 1), start + 1);
-	if (end == std::string::npos) return;
-	
-	std::vector<std::string> parts;
-	pos = start + 1;
-	while (pos < end) {
-		commaPos = line.find(',', pos);
-		if (commaPos >= end) {
-			parts.push_back(line.substr(pos, end - pos));
-			break;
+		if (int_start == std::string::npos) {
+			return;
+		}
+		if (int_end == std::string::npos) {
+			int_end = line.size();
 		}
 
-		parts.push_back(line.substr(pos, commaPos - pos));
-		pos = commaPos + 1;
+		int a = std::atoi(line.substr(int_start, int_end - int_start).c_str());
+		chain.push_back(a);
+
+		int_start = int_end;
 	}
-	if (parts.size() != 4) {
-		throw std::exception("");
-	}
-	shapeData.color = std::make_shared<ColorArea>();
-	shapeData.color->Name = parts[0];
-	shapeData.color->Color[0] = std::stoi(parts[1]);
-	shapeData.color->Color[1] = std::stoi(parts[2]);
-	shapeData.color->Color[2] = std::stoi(parts[3]);
 }
 
 void VectorGraphic::AddPolyline(std::vector<VE::Point>& pts)
@@ -269,39 +237,63 @@ void VectorGraphic::Load(std::string svgPath)
 
 	std::string line;
 	std::ifstream myfile(svgPath);
-	if (myfile.is_open())
+	if (!myfile.is_open())
+		return;
+	int i = 0;
+	while (getline(myfile, line))
 	{
-		int i = 0;
-		while (getline(myfile, line))
-		{
+		std::map<std::string, std::string> attributes;
+		parseXML(attributes, line);
+		auto tagName = attributes.find("tag");
+		if (tagName == attributes.end())
+			continue;
 
+		if (tagName->second == "polyline") {
 			std::vector<VE::Point> pts;
-			getPoints(pts, line);
-			if (pts.size() >= 2 ) {
-				// TODO remove limit
-				if (true ||i >= 0 && i <= 1){
-					AddPolyline(pts);
-				}
-				i++;
+			auto pointIt = attributes.find("points");
+			if (pointIt != attributes.end()) {
+				parseFloatPairs(pts, pointIt->second);
+			}
+			if (pts.size() > 1) {
+				AddPolyline(pts);
 			}
 			else {
+				std::cout << "Polyline too short.";
+			}
+		}
+		else if (tagName->second == "shape") {
+			if (attributes.find("data") != attributes.end() &&
+				attributes.find("name") != attributes.end() &&
+				attributes.find("color") != attributes.end()) {
+
 				VE::PolyshapeData shapeData;
-				getSvgShapes(shapeData, line);
-				if (!shapeData.data.empty()) {
-					VE::PolyshapePtr shape = Polyshape::FromData(Polylines, shapeData);
-					if (shape == nullptr) {
-						std::cout << "Failed to make shape : " << line << "\n";
-					}
-					else {
-						Polyshapes.push_back(shape);
-					}
+				parseIntPairs(shapeData.data, attributes.find("data")->second);
+				std::vector<int> colors;
+				std::string colorString = attributes.find("color")->second;
+				size_t colorStart = colorString.find("(") + 1;
+				size_t colorEnd = colorString.find(")");
+
+				parseIntChain(colors, colorString.substr(colorStart, colorEnd - colorStart));
+				shapeData.colorArea = std::make_shared<ColorArea>();
+				shapeData.colorArea->Color = cv::Scalar(colors[0], colors[1], colors[2]);
+				shapeData.colorArea->Name = attributes.find("name")->second;
+
+				VE::PolyshapePtr shape = Polyshape::FromData(Polylines, shapeData);
+				if (shape == nullptr) {
+					std::cout << "Failed to make shape: " << shapeData.colorArea->Name << "\n";
+				}
+				else {
+					Polyshapes.push_back(shape);
 				}
 			}
-
+			else {
+				std::cout << "Invalid shape.\n";
+			}
 		}
-		myfile.close();
+
 	}
-	std::cout << Polyshapes.size() << "\n";
+	myfile.close();
+	MakeColorsUnique();
 }
 
 void VectorGraphic::Save(std::string path, std::string image_path, cv::Size2i shape)
@@ -323,7 +315,7 @@ void VectorGraphic::Save(std::string path, std::string image_path, cv::Size2i sh
 			shapeData.data.push_back(std::pair<int, int>(index, (int)con.at));
 		}
 		if (!shapeData.data.empty()) {
-			shapeData.color = ps->getColor();
+			shapeData.colorArea = ps->getColor();
 			shapeDatas.push_back(shapeData);
 		}
 	}
@@ -334,9 +326,11 @@ void VectorGraphic::Save(std::string path, std::string image_path, cv::Size2i sh
 // Also extract the smaller shapes from larger ones which contain them.
 void VectorGraphic::SavePolyshapes(std::string path, std::string image_path, cv::Size2i shape)
 {
+	std::cout << "Exporting shapes ";
 	// Merge same ColorArea shapes.
 	auto saveShapes = Polyshapes;
-	decltype(saveShapes) mergedShapes;
+	decltype(Polyshapes) newShapes;
+
 	while(!saveShapes.empty())
 	{
 		std::vector<Connection> cons;
@@ -349,7 +343,7 @@ void VectorGraphic::SavePolyshapes(std::string path, std::string image_path, cv:
 		{
 			auto& shapeB = saveShapes[i];
 			
-			if (colorArea == shapeB->getColor())
+			if (*colorArea == *shapeB->getColor())
 			{
 				cons.insert(cons.end(), shapeB->getConnections().begin(), shapeB->getConnections().end());
 				saveShapes.erase(saveShapes.begin() + i);
@@ -374,6 +368,7 @@ void VectorGraphic::SavePolyshapes(std::string path, std::string image_path, cv:
 		std::vector<Connection> shapeCons = { std::move(cons.back()) };
 		cons.pop_back();
 
+		decltype(Polyshapes) mergedShapes;
 		// Retrace shapes.
 		while (true) {
 			if (shapeCons.front().StartPoint() == shapeCons.back().EndPoint()) {
@@ -400,10 +395,64 @@ void VectorGraphic::SavePolyshapes(std::string path, std::string image_path, cv:
 				}
 			}
 		}
+
+
+		// Check the mergedShapes for overlaps before inserting them 
+		// into the newShapes.
+		SortShapes(mergedShapes);
+		std::vector<VE::Connection> otherCons;
+		std::vector<VE::PolylinePtr> otherLines;
+
+		for (size_t i = 1; i < mergedShapes.size(); i++)
+		{
+			bool doContainCheck = false;
+			for (size_t j = 0; j < i; j++) {
+				if (mergedShapes[j]->getBounds().Contains(mergedShapes[i]->getBounds())) {
+					doContainCheck = true;
+					break;
+				}
+			}
+
+			for (auto& con : mergedShapes[i - 1]->getConnections())
+			{
+				otherCons.push_back(con);
+				otherLines.push_back(con.polyline);
+			}
+
+			if (!doContainCheck) {
+				continue;
+			}
+			VE::Connection firstCon = mergedShapes[i]->getConnections()[0];
+			VE::Connection conResult;
+			if (ClosestConnectionLeft(firstCon.StartPoint(), otherLines, conResult)) {
+				for (auto& con : otherCons)
+				{
+					if (con.polyline == conResult.polyline)
+					{
+						if (con.at == conResult.at) {
+							//std::cout << "Detected enclosed shape: " << mergedShapes[i]->getColor()->Name << "\n";
+							mergedShapes.erase(mergedShapes.begin() + i);
+							i--;
+						}
+						else {
+							// Shapes are next to each other, and that's ok.
+						}
+						// We can break. There will be no other connection with the same
+						// polyline, since we removed the doubles.
+						break;
+					}
+				}
+			}
+		}
+
+		newShapes.insert(newShapes.end(), mergedShapes.begin(), mergedShapes.end());
+
+		std::cout << "|";
 	}
 	
-	SortShapes(mergedShapes);
-	Export::SaveSVG(path, image_path, shape, mergedShapes);
+	SortShapes(newShapes);
+	std::cout << "\nSaving.\n"; 
+	Export::SaveSVG(path, image_path, shape, newShapes);
 }
 
 // Snap endpoints of curves
@@ -672,36 +721,39 @@ void VectorGraphic::MergeConnected(const float& pMinMergeAngle)
 
 void VectorGraphic::ComputeConnectionStatus()
 {
-	for (VE::PolylinePtr& pl:Polylines)
-	{
-		auto otherLines = Polylines;
-		otherLines.erase(std::find(otherLines.begin(), otherLines.end(), pl));
+	for (VE::PolylinePtr& pl : Polylines) {
+		pl->ResetStatus();
+	}
+	int amount = -1;
+	int newAmount = 0;
+	while (amount != newAmount) {
+		amount = newAmount;
+		newAmount = 0;
+		for (VE::PolylinePtr& pl : Polylines)
+		{
+			auto otherLines = Polylines;
+			otherLines.erase(std::find(otherLines.begin(), otherLines.end(), pl));
 
-		// compute front
-		pl->ConnectFront = GetConnections(pl->Front(), otherLines);
-		pl->ConnectBack = GetConnections(pl->Back(), otherLines);
-		pl->UpdateStatus();
+			// compute front
+			pl->ConnectFront = GetConnections(pl->Front(), otherLines);
+			pl->ConnectBack = GetConnections(pl->Back(), otherLines);
+			pl->UpdateStatus();
+			if (pl->Status() == Polyline::LineStat::invalid) {
+				newAmount++;
+			}
+		}
 	}
 }
 
 void VectorGraphic::RemoveUnusedConnections()
 {
-	int amount = 0;
-	while (amount != Polylines.size()) {
-		amount = Polylines.size();
-		
-		decltype(Polylines) validLines;
-		for (VE::PolylinePtr& pl : Polylines)
-		{
-			if (pl->Status() != Polyline::LineStat::invalid)
-				validLines.push_back(pl);
-		}
-
-		Polylines = std::move(validLines);
-
-		ComputeConnectionStatus();
+	decltype(Polylines) validLines;
+	for (VE::PolylinePtr& pl : Polylines)
+	{
+		if (pl->Status() != Polyline::LineStat::invalid)
+			validLines.push_back(pl);
 	}
-
+	Polylines = std::move(validLines);
 }
 
 void VectorGraphic::Split(VE::PolylinePtr pl, VE::Point pt)
@@ -729,6 +781,7 @@ void VectorGraphic::Split(VE::PolylinePtr pl, VE::Point pt)
 	Polylines.push_back(std::make_shared<VE::Polyline>(back));
 }
 
+/*
 void VectorGraphic::Connect(VE::Connection& a, VE::Connection& b)
 {
 	std::vector<VE::Point> pts;
@@ -760,6 +813,7 @@ void VectorGraphic::Connect(VE::Connection& a, VE::Connection& b)
 
 	Polylines.push_back(pl);
 }
+*/
 
 void VectorGraphic::Delete(VE::PolylinePtr line)
 {
@@ -1003,6 +1057,19 @@ bool VectorGraphic::DeleteShape(const VE::Point& pt)
 	return false;
 }
 
+void VectorGraphic::MakeColorsUnique()
+{
+	for (auto psA = Polyshapes.begin(); psA != Polyshapes.end(); psA++)
+	{
+		ColorAreaPtr col = (*psA)->getColor();
+		for (auto psB = psA + 1; psB != Polyshapes.end(); psB++) {
+			if ((*psB)->getColor() == col) {
+				(*psB)->setColor(col);
+			}
+		}
+	}
+}
+
 void VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
 	VE::Point& closest, VE::PolylinePtr& element)
 {
@@ -1197,6 +1264,9 @@ void VectorGraphic::Draw(cv::Mat& img, VE::Transform& t)
 
 VE::Bounds VectorGraphic::getBounds()
 {
+	if (Polylines.empty())
+		return Bounds(0, 0, 100, 100);
+
 	Bounds b = Polylines[0]->getBounds();
 	for (auto&pl:Polylines)
 	{

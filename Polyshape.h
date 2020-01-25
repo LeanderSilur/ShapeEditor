@@ -44,7 +44,7 @@ namespace VE {
 	public:
 		// First comes the Polyline index, then the Connection Location.
 		std::vector<std::pair<int, int>> data;
-		VE::ColorAreaPtr color;
+		VE::ColorAreaPtr colorArea;
 	};
 
 }

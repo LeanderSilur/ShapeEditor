@@ -63,57 +63,60 @@ void ImageViewer::AddFrame(Animation::Frame& frame)
 	frames.push_back(frame);
 }
 
-void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
+void ImageViewer::ConnectUi(ShapeEditor& se)
 {
+	QObject::connect(&se, &ShapeEditor::keyPress, this, &ImageViewer::keyPressEvent);
+	auto& seUi = se.getUi();
+
 	auto cl = &QPushButton::clicked;
-	wMainMenu = se.menuTabWidget;
-	lInfoText = se.lInfoText;
-	lFrameText = se.lFrameText;
+	wMainMenu = seUi.menuTabWidget;
+	lInfoText = seUi.lInfoText;
+	lFrameText = seUi.lFrameText;
 	
-	QObject::connect(se.bFileDirectory,
+	QObject::connect(seUi.bFileDirectory,
 		cl, this, &ImageViewer::FileSetDirectory);
-	QObject::connect(se.bFileLoad,
+	QObject::connect(seUi.bFileLoad,
 		cl, this, &ImageViewer::FileLoad);
-	QObject::connect(se.bFileSaveLines,
+	QObject::connect(seUi.bFileSaveLines,
 		cl, this, &ImageViewer::FileSave);
-	QObject::connect(se.bFrameReload,
+	QObject::connect(seUi.bFrameReload,
 		cl, this, &ImageViewer::ReloadFrame);
-	QObject::connect(se.bFramePrev,
+	QObject::connect(seUi.bFramePrev,
 		cl, this, &ImageViewer::PrevFrame);
-	QObject::connect(se.bFrameNext,
+	QObject::connect(seUi.bFrameNext,
 		cl, this, &ImageViewer::NextFrame);
 
-	QObject::connect(se.bsnap,
+	QObject::connect(seUi.bsnap,
 		cl, this, &ImageViewer::SnapEndpoints);
-	QObject::connect(se.boverlap,
+	QObject::connect(seUi.boverlap,
 		cl, this, &ImageViewer::RemoveOverlaps);
-	QObject::connect(se.bmergeConnections,
+	QObject::connect(seUi.bmergeConnections,
 		cl, this, &ImageViewer::MergeConnected);
-	QObject::connect(se.bsimplify,
+	QObject::connect(seUi.bsimplify,
 		cl, this, &ImageViewer::Simplify);
-	QObject::connect(se.bsmooth,
+	QObject::connect(seUi.bsmooth,
 		cl, this, &ImageViewer::Smooth);
-	QObject::connect(se.bbasicCleanup,
+	QObject::connect(seUi.bbasicCleanup,
 		cl, this, &ImageViewer::BasicCleanup);
 
 
-	QObject::connect(se.bupdateStat,
+	QObject::connect(seUi.bupdateStat,
 		cl, this, &ImageViewer::ComputeConnectionStatus);
-	QObject::connect(se.bremoveUnused,
+	QObject::connect(seUi.bremoveUnused,
 		cl, this, &ImageViewer::RemoveUnusedConnections);
-	QObject::connect(se.bshapesCalc,
+	QObject::connect(seUi.bshapesCalc,
 		cl, this, &ImageViewer::CalcShapes);
-	QObject::connect(se.bshapesClear,
+	QObject::connect(seUi.bshapesClear,
 		cl, this, &ImageViewer::ClearShapes);
 
 
 
-	interactionButtons[InteractionMode::Examine] = se.bi_examine;
-	interactionButtons[InteractionMode::Split] = se.bi_split;
-	interactionButtons[InteractionMode::Connect] = se.bi_connect;
-	interactionButtons[InteractionMode::Delete] = se.bi_delete;
-	interactionButtons[InteractionMode::ShapeColor] = se.bi_shapeColor;
-	interactionButtons[InteractionMode::ShapeDelete] = se.bi_shapeDelete;
+	interactionButtons[InteractionMode::Examine] = seUi.bi_examine;
+	interactionButtons[InteractionMode::Split] = seUi.bi_split;
+	interactionButtons[InteractionMode::Connect] = seUi.bi_connect;
+	interactionButtons[InteractionMode::Delete] = seUi.bi_delete;
+	interactionButtons[InteractionMode::ShapeColor] = seUi.bi_shapeColor;
+	interactionButtons[InteractionMode::ShapeDelete] = seUi.bi_shapeDelete;
 
 	QObject::connect(interactionButtons[InteractionMode::Examine],
 		cl, this, &ImageViewer::ctExamine);
@@ -127,7 +130,6 @@ void ImageViewer::ConnectUi(Ui_ShapeEditor& se)
 		cl, this, &ImageViewer::ctShapeColor);
 	QObject::connect(interactionButtons[InteractionMode::ShapeDelete],
 		cl, this, &ImageViewer::ctShapeDelete);
-
 
 
 	interactionButtons[InteractionMode::Examine]->click();
@@ -310,8 +312,9 @@ void ImageViewer::ReleaseShapeColor(QMouseEvent* event)
 	transform.applyInv(pt);
 
 	if (event->button() == Qt::LeftButton) {
-		if (AltPressed())
+		if (AltPressed()) {
 			vectorGraphic().PickColor(pt, ActiveColor);
+		}
 		else {
 			bool result = true;
 			if (CtrlPressed() || ShiftPressed()) {
@@ -339,6 +342,10 @@ void ImageViewer::ReleaseShapeColor(QMouseEvent* event)
 				ShowMat();
 			}
 		}
+		lInfoText->setText((ActiveColor->Name + " ["
+			+ std::to_string((int)ActiveColor->Color[0]) + ", "
+			+ std::to_string((int)ActiveColor->Color[1]) + ", "
+			+ std::to_string((int)ActiveColor->Color[2]) + "]").c_str());
 	}
 	if (event->button() == Qt::RightButton) {
 		if (vectorGraphic().DeleteShape(pt))
@@ -441,7 +448,7 @@ void ImageViewer::FrameSelected()
 void ImageViewer::FrameAll()
 {
 	if (vectorGraphic().Polylines.empty()
-		||sourceImage().empty())
+		|| sourceImage().empty())
 		return;
 	
 	VE::Bounds bounds = vectorGraphic().getBounds();
@@ -594,7 +601,7 @@ void ImageViewer::keyPressEvent(QKeyEvent* event)
 		event->key() == Qt::Key_Backspace) RemoveUnusedConnections(true);
 
 	else if (event->key() == Qt::Key_Right) NextFrame(true);
-	else if (event->key() == Qt::Key_Left) PrevFrame	(true);
+	else if (event->key() == Qt::Key_Left) PrevFrame(true);
 
 	else if (event->modifiers() == Qt::KeypadModifier) {
 		if (event->key() == Qt::Key_1)
@@ -756,7 +763,7 @@ void ImageViewer::NextFrame(bool checked)
 	if (frameIndex + 1 < frames.size())
 		frameIndex++;
 
-	lFrameText->setText(QString(frameIndex + 1) + " / " + QString((int)frames.size()));
+	lFrameText->setText((std::to_string(frameIndex + 1) + " / " + std::to_string((int)frames.size())).c_str());
 	ShowMat();
 }
 
@@ -764,7 +771,8 @@ void ImageViewer::PrevFrame(bool checked)
 {
 	if (frameIndex - 1 >= 0)
 		frameIndex--;
-	lFrameText->setText(QString(frameIndex + 1) + " / " + QString((int)frames.size()));
+
+	lFrameText->setText((std::to_string(frameIndex + 1) + " / " + std::to_string((int)frames.size())).c_str());
 	ShowMat();
 }
 
@@ -823,6 +831,7 @@ void ImageViewer::FileLoad(bool checked)
 		QString("Choose a .svg with matching .png"), WORKING_DIRECTORY.c_str(),
 		QString("Edited Lineart (*.png.l.svg);;Lineart (*.png.svg)"));
 
+	std::cout << "Loading ";
 	decltype(frames) newFrames;
 	for (size_t i = 0; i < fileNames.size(); i++)
 	{
@@ -830,13 +839,17 @@ void ImageViewer::FileLoad(bool checked)
 		Animation::Frame frame;
 		if (frame.Load(fileName)) {
 			newFrames.push_back(frame);
+			std::cout << "|"; 
+		}
+		else {
+			std::cout << ".";
 		}
 	}
 	if (!newFrames.empty()) {
 		frameIndex = 0;
 		frames = newFrames;
 	}
-	
+	std::cout << "\n";
 }
 
 void ImageViewer::FileSave(bool checked)
