@@ -489,6 +489,22 @@ void VectorGraphic::SnapEndpoints(const float& pSnappingDistance2)
 	std::cout << " done.\n";
 }
 
+inline float Cross(const VE::Point& a, const VE::Point& b) {
+	return a.x * b.y - a.y * b.x;
+}
+
+// Intersection
+inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Point& q, const VE::Point& qs, float&t, float&u) {
+	const VE::Point r = pr - p;
+	const VE::Point s = qs - q;
+	float rxs = Cross(r, s);
+	if (rxs == 0)
+		throw std::logic_error("Line segments are collinear.");
+
+	const VE::Point pq = q - p;
+	t = Cross(pq, s) / rxs;
+	u = Cross(pq, r) / rxs;
+}
 
 // trace in direction to determine overlap
 // starting at lineA[a] == lineB[b]
@@ -531,41 +547,102 @@ void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Poi
 // points		the path
 // others		all the other polylines
 // result		whatever remains from the path
-void GetNoneOverlappingLines(const std::vector<VE::Point>& points,
+void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 	const std::vector<PolylinePtr>::iterator& othersBegin, const std::vector<PolylinePtr>::iterator& othersEnd,
 	std::vector<PolylinePtr>& result)
 {
 	int start = 0;
+	std::vector<VE::Point> points = activeLine->getPoints();
+	
+	// Only compare lines with overlapping bounds.
+	std::vector<PolylinePtr> others;
+	std::vector<Bounds> otherBounds;
+	std::vector<float> distances2;
+	for (auto other = othersBegin; other != othersEnd; other++)
+	{
+		if (activeLine->getBounds().Overlap((*other)->getBounds())) {
+			others.push_back(*other);
+			Bounds bounds = (*other)->getBounds();
+			float padding = activeLine->getMaxLength() * 0.5 * 0.7072;
+			bounds.Pad(padding);
+			otherBounds.push_back(bounds);
+
+			float distanceSum2 = activeLine->getMaxLength() * activeLine->getMaxLength()
+				+ (*other)->getMaxLength() * (*other)->getMaxLength() / 4;
+			distances2.push_back(distanceSum2);
+		}
+	}
+
 	for (int i = 0; i < (int)points.size() - 1; i++)
 	{
-		// Compare to all the other polylines
-		for (auto otherLine = othersBegin; otherLine != othersEnd; otherLine++)
+		// Compare to all the other polylines.
+		for (int j = 0; j < others.size(); j++)
 		{
-			int indexOther = (*otherLine)->PointIndex(points[i], 0);
+			if (!otherBounds[j].Contains(points[i]))
+				continue;
+			auto otherLine = others[j];
+			const std::vector<VE::Point>& otherPoints = otherLine->getPoints();
 
-			// Is there a same point from the otherLine?
+			int indexOther = otherLine->PointIndex(points[i], distances2[j]);
+
+			// Is there a close point on the otherLine?
 			if (indexOther >= 0) {
-				// Chop the first segments, if we aren't at the first point anymore,
-				// and store it in the new polyline list.
-				if (i > start) {
-					//std::cout << "Chop at " << j << "/" << points.size() << "\n";
-					std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
-					result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-				}
+				// Check if there is an intersection or overlap.
+				
+				// Next point is the same.
+				if (otherPoints[indexOther] == points[i + 1])
+					continue;
+				
+				if (otherPoints[indexOther] == points[i]) { // Found point is the same.
+					// Chop the first segments, if we aren't at the first point anymore,
+					// and store it in the new polyline list.
+					if (i > start) {
+						//std::cout << "Chop at " << j << "/" << points.size() << "\n";
+						std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
+						result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+					}
 
-				int end = i;
-				// Trace to the "end" of the overlap by shifting i (~ the read head).
-				TraceOverlap(points, (*otherLine)->getPoints(), end, indexOther);
-				// Single point, but we had just progressed and chopped something off.
-				// OR
-				// There was a longer trace.
-				// => These conditions are there to prevent getting stuck at the end of an overlap.
-				if ((end == i && end > start) ||
-					end > i)
-				{
-					start = end;
-					i = end - 1;
-					break;
+					int end = i;
+					// Trace to the "end" of the overlap by shifting i (~ the read head).
+					TraceOverlap(points, otherLine->getPoints(), end, indexOther);
+					// Single point, but we had just progressed and chopped something off.
+					// OR
+					// There was a longer trace.
+					// => These conditions are there to prevent getting stuck at the end of an overlap.
+					if ((end == i && end > start) ||
+						end > i)
+					{
+						start = end;
+						i = end - 1;
+						break;
+					}
+				}
+				else { // Found point might intersect.
+					float t, u;
+
+					if (indexOther > 0) {
+						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
+					}
+
+					bool intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
+					if (!intersectionFound && indexOther < otherPoints.size() - 1) {
+						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
+					}
+					intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
+
+					if (intersectionFound) {
+						VE::Point direction = points[i + 1] - points[i];
+						VE::Point intersect = points[i] + direction * t;
+						if (intersect != points[i]) { // Don't get stuck after an intersection.
+							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
+							choppedPoints.back() = intersect;
+
+							result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+							points[i] = choppedPoints.back();
+							start = i;
+							i--;
+						}
+					}
 				}
 			}
 		}
@@ -585,24 +662,26 @@ void VectorGraphic::RemoveOverlaps()
 	int numberOfPolylines = Polylines.size();
 
 	// The last polyline will not overlap, as all other have been corrected.
-	for (int i = numberOfPolylines - 1; i > 0 - 1; i--)
+	for (int i = numberOfPolylines; i >= 0; i--)
 	{
 		// Take first out.
-		VE::PolylinePtr polyline = Polylines[i];
-		Polylines.erase(Polylines.begin() + i);
-
-		const std::vector<VE::Point>& points = polyline->getPoints();
+		VE::PolylinePtr polyline = Polylines.front();
+		Polylines.erase(Polylines.begin());
 
 		decltype(Polylines) newPolylines;
-		GetNoneOverlappingLines(points, Polylines.begin(), Polylines.begin() + i, newPolylines);
+		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
 
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
 	}
 	std::cout << "\n";
 	for (auto& pl : Polylines)
-		if (pl->Length() < 2)
-			throw std::exception("WTF");
+		if (pl->Length() < 2) {
+			std::cout << "FATAL\n";
+			//throw std::exception("WTF");
+		}
+			
+	return;
 }
 
 void VectorGraphic::MergeConnected(const float& pMinMergeAngle)
