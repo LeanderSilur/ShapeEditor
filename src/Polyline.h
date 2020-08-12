@@ -19,7 +19,7 @@ namespace VE {
 		PtTree tree;
 		float maxLength;
 
-		Polyline::LineStat status = LineStat::std;
+		Polyline::LineStat status = (LineStat)0;
 
 		bool removeDoubles();
 		void calculateKDTree();

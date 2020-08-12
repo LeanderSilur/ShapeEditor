@@ -150,6 +150,10 @@ namespace VE {
 
 	void Polyline::Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride, bool circles)
 	{
+		// If this object has not loaded yet, don't draw anything.
+		if (this == nullptr)
+			return;
+
 		cv::Scalar color;
 		if (status == LineStat::std)
 			color = POLYLINE_COLOR_STD;

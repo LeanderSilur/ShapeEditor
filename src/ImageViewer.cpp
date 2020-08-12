@@ -170,7 +170,8 @@ void ImageViewer::DrawHighlightPoints(const cv::Scalar & color)
 	VE::PolylinePtr element;
 
 	int point_index = ClosestLinePointId(closestPt, element);
-	if (point_index > 0) {
+	
+	if (point_index >= 0) {
 		std::stringstream stream;
 		stream << std::fixed << std::setprecision(3) << "[" << point_index << "] " << closestPt.x << ", " << closestPt.y;
 		lInfoText->setText(stream.str().c_str());
