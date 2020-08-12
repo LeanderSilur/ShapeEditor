@@ -8,7 +8,7 @@ namespace VE {
 
 	// big and small numbers
 	const float FMAX = std::numeric_limits<float>::max();
-	const float EPSILON = FLT_EPSILON;
+	const float EPSILON = FLT_EPSILON ;
 	const float EPSILON_PLUS_ONE = 1 + EPSILON;
 
 

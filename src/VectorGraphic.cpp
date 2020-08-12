@@ -493,6 +493,13 @@ inline float Cross(const VE::Point& a, const VE::Point& b) {
 	return a.x * b.y - a.y * b.x;
 }
 
+class CollinearityException : public std::exception
+{
+public:
+	CollinearityException() {};
+};
+
+
 // Intersection
 inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Point& q, const VE::Point& qs, float&t, float&u) {
 	const VE::Point r = pr - p;
@@ -506,7 +513,7 @@ inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Poin
 			t = u = std::numeric_limits<float>::max();
 			return;
 		}
-		throw std::logic_error("Line segments are collinear.");
+		throw CollinearityException();
 	}
 
 	t = Cross(pq, s) / rxs;
@@ -582,6 +589,7 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 
 	for (int i = 0; i < (int)points.size() - 1; i++)
 	{
+compareToOtherPolylines:
 		// Compare to all the other polylines.
 		for (int j = 0; j < others.size(); j++)
 		{
@@ -626,25 +634,39 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 						u = -1;
 
 					if (indexOther > 0) {
-						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
+						try {
+							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
+						}
+						catch (const CollinearityException & e) {
+							// Collinearity found, lines will not "intersect".
+							std::cout << "Collinearity";
+							t = -1;
+						}
 					}
 
 					bool intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
 					if (!intersectionFound && indexOther < otherPoints.size() - 1) {
-						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
+						try {
+							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
+						}
+						catch (const CollinearityException & e) {
+							// Collinearity found, lines will not "intersect".
+							std::cout << "Collinearity";
+							t = -1;
+						}
 					}
 
 					// t must no be 0 or 1, because in that case, there is already a point available.
 					intersectionFound = t > 0 && t < 1 && u >= 0 && u <= 1;
 
 					if (intersectionFound) {
-						if (t == 0) {}
 						VE::Point direction = points[i + 1] - points[i];
 						VE::Point intersect = points[i] + direction * t;
-						// There may be not enough resolution floats if t is very small.
-						if (intersect == points[i]) {
-							points[i] = intersect;
-							i--;
+
+						if (points[i] == intersect) {
+							// There may be not enough resolution floats if t is very small.
+							// There is not need to trace, because if a point was on the other 
+							// line, a trace would have been started already.
 						}
 						else {
 							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
@@ -653,7 +675,8 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 
 							points[i] = intersect;
 							start = i;
-							i--;
+							// restart comparison
+							goto compareToOtherPolylines;
 						}
 					}
 				}
@@ -675,7 +698,7 @@ void VectorGraphic::RemoveOverlaps()
 	int numberOfPolylines = Polylines.size();
 
 	// The last polyline will not overlap, as all other have been corrected.
-	for (int i = numberOfPolylines - 1; i >= 0; i--)
+	for (int i = 0; i < numberOfPolylines; i++)
 	{
 		// Take first out.
 		VE::PolylinePtr polyline = Polylines.front();
