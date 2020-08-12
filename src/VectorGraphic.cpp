@@ -493,15 +493,29 @@ inline float Cross(const VE::Point& a, const VE::Point& b) {
 	return a.x * b.y - a.y * b.x;
 }
 
+class CollinearityException : public std::exception
+{
+public:
+	CollinearityException() {};
+};
+
+
 // Intersection
 inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Point& q, const VE::Point& qs, float&t, float&u) {
 	const VE::Point r = pr - p;
 	const VE::Point s = qs - q;
 	float rxs = Cross(r, s);
-	if (rxs == 0)
-		throw std::logic_error("Line segments are collinear.");
 
 	const VE::Point pq = q - p;
+
+	if (rxs == 0) {
+		if (Cross(pq, r)) {
+			t = u = std::numeric_limits<float>::max();
+			return;
+		}
+		throw CollinearityException();
+	}
+
 	t = Cross(pq, s) / rxs;
 	u = Cross(pq, r) / rxs;
 }
@@ -554,7 +568,7 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 	int start = 0;
 	std::vector<VE::Point> points = activeLine->getPoints();
 	
-	// Only compare lines with overlapping bounds.
+	// Only compare other lines with overlapping bounds.
 	std::vector<PolylinePtr> others;
 	std::vector<Bounds> otherBounds;
 	std::vector<float> distances2;
@@ -575,6 +589,7 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 
 	for (int i = 0; i < (int)points.size() - 1; i++)
 	{
+compareToOtherPolylines:
 		// Compare to all the other polylines.
 		for (int j = 0; j < others.size(); j++)
 		{
@@ -586,14 +601,10 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 			int indexOther = otherLine->PointIndex(points[i], distances2[j]);
 
 			// Is there a close point on the otherLine?
+			// Then check if there is an intersection or overlap.
 			if (indexOther >= 0) {
-				// Check if there is an intersection or overlap.
-				
-				// Next point is the same.
-				if (otherPoints[indexOther] == points[i + 1])
-					continue;
-				
-				if (otherPoints[indexOther] == points[i]) { // Found point is the same.
+				// Found point maybe the same. => OVERLAP
+				if (otherPoints[indexOther] == points[i]) {
 					// Chop the first segments, if we aren't at the first point anymore,
 					// and store it in the new polyline list.
 					if (i > start) {
@@ -617,30 +628,55 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 						break;
 					}
 				}
-				else { // Found point might intersect.
-					float t, u;
+				// Found point might intersect. => INTERSECTION
+				else {
+					float t = -1,
+						u = -1;
 
 					if (indexOther > 0) {
-						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
+						try {
+							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
+						}
+						catch (const CollinearityException & e) {
+							// Collinearity found, lines will not "intersect".
+							std::cout << "Collinearity";
+							t = -1;
+						}
 					}
 
 					bool intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
 					if (!intersectionFound && indexOther < otherPoints.size() - 1) {
-						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
+						try {
+							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
+						}
+						catch (const CollinearityException & e) {
+							// Collinearity found, lines will not "intersect".
+							std::cout << "Collinearity";
+							t = -1;
+						}
 					}
-					intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
+
+					// t must no be 0 or 1, because in that case, there is already a point available.
+					intersectionFound = t > 0 && t < 1 && u >= 0 && u <= 1;
 
 					if (intersectionFound) {
 						VE::Point direction = points[i + 1] - points[i];
 						VE::Point intersect = points[i] + direction * t;
-						if (intersect != points[i]) { // Don't get stuck after an intersection.
-							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
-							choppedPoints.back() = intersect;
 
+						if (points[i] == intersect) {
+							// There may be not enough resolution floats if t is very small.
+							// There is not need to trace, because if a point was on the other 
+							// line, a trace would have been started already.
+						}
+						else {
+							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
+							choppedPoints.push_back(intersect);
 							result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-							points[i] = choppedPoints.back();
+
+							points[i] = intersect;
 							start = i;
-							i--;
+							// restart comparison
+							goto compareToOtherPolylines;
 						}
 					}
 				}
@@ -662,7 +698,7 @@ void VectorGraphic::RemoveOverlaps()
 	int numberOfPolylines = Polylines.size();
 
 	// The last polyline will not overlap, as all other have been corrected.
-	for (int i = numberOfPolylines; i >= 0; i--)
+	for (int i = 0; i < numberOfPolylines; i++)
 	{
 		// Take first out.
 		VE::PolylinePtr polyline = Polylines.front();
@@ -670,16 +706,23 @@ void VectorGraphic::RemoveOverlaps()
 
 		decltype(Polylines) newPolylines;
 		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
+		
+		for (auto& pl : newPolylines) {
+			if (pl->Length() < 2) {
+				std::cout << "FATAL at "<< i << "\n";
+			}
+		}
 
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
 	}
 	std::cout << "\n";
-	for (auto& pl : Polylines)
+	for (auto& pl : Polylines) {
 		if (pl->Length() < 2) {
 			std::cout << "FATAL\n";
 			//throw std::exception("WTF");
 		}
+	}
 			
 	return;
 }
@@ -1149,31 +1192,38 @@ void VectorGraphic::MakeColorsUnique()
 	}
 }
 
-void VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
+int VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
 	VE::Point& closest, VE::PolylinePtr& element)
 {
 	Bounds bounds(0, 0, img.cols, img.rows);
 	t.applyInv(bounds);
-	ClosestPolyline(bounds, distance2, pt, closest, element);
+	return ClosestPolyline(bounds, distance2, pt, closest, element);
 }
 
-void VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const VE::Point& pt,
+
+int VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const VE::Point& pt,
 	VE::Point& closest, VE::PolylinePtr& element)
 {
-	int id = 0,
-		closest_id = 0;
+	// Closest Line and Point Indices are kept for debugging.
+	// Perhaps this function should simply return indices instead of references.
+	int lineIdx = 0,
+		pointIdx= 0,
+		closestLineIdx = 0,
+		closestPointIdx = 0;
 	for (auto&pl:Polylines) {
 		// Check for visibility first.
 		if (pl->AnyPointInRect(bounds)) {
 			float previous = distance2;
-			pl->Closest2(pt, distance2, closest);
+			pointIdx = pl->ClosestIdx2(pt, distance2, closest);
 			if (previous != distance2) {
 				element = pl;
-				closest_id = id;
+				closestLineIdx = lineIdx;
+				closestPointIdx = pointIdx;
 			}
 		}
-		id++;
+		lineIdx++;
 	}
+	return closestPointIdx;
 }
 
 bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float& maxDist, bool&downwards)

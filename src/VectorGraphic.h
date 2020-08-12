@@ -61,10 +61,12 @@ public:
 
 
 	// bloated complicated method, used for the imageviewer
-	// returns true if a point closer than distance2 was found
-	void ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
+	// returns the points index if a point closer than distance2 was found
+	// If there was no point, the index -1 is returned.
+	int ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
 		VE::Point& closest, VE::PolylinePtr& element);
-	void ClosestPolyline(VE::Bounds& b, float& distance2, const VE::Point& pt,
+	
+	int ClosestPolyline(VE::Bounds& b, float& distance2, const VE::Point& pt,
 		VE::Point& closest, VE::PolylinePtr& element);
 
 private: 

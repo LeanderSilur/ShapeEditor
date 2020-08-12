@@ -166,7 +166,7 @@ void kNextNearest(const VE::Point& target, PtTreeNode* current, float& maxDist2,
 
 
 
-
+// Returns index of closest point within maxdist2, otherwise -1.
 int PtTree::nearest(const VE::Point& target, float& maxDist2)
 {
 	if (root == nullptr) {

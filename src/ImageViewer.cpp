@@ -135,7 +135,7 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 	interactionButtons[InteractionMode::Examine]->click();
 }
 
-bool ImageViewer::ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element)
+int ImageViewer::ClosestLinePointId(VE::Point& closest, VE::PolylinePtr& element)
 {
 	// Get the closest element and point to the mouse.
 	element = nullptr;
@@ -147,11 +147,11 @@ bool ImageViewer::ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element)
 	float distance2 = maxDist2;
 
 
-	vectorGraphic().ClosestPolyline(
+	int point_id = vectorGraphic().ClosestPolyline(
 		display, transform, distance2,
 		mousePos, closest, element);
 
-	return element != nullptr;
+	return point_id;
 }
 
 void ImageViewer::DrawHighlight(const cv::Scalar & color)
@@ -159,7 +159,7 @@ void ImageViewer::DrawHighlight(const cv::Scalar & color)
 	VE::Point closestPt;
 	VE::PolylinePtr element;
 
-	if (ClosestLinePoint(closestPt, element)) {
+	if (ClosestLinePointId(closestPt, element) >= 0) {
 		element->Draw(display, transform, &color, false);
 	}
 }
@@ -169,9 +169,10 @@ void ImageViewer::DrawHighlightPoints(const cv::Scalar & color)
 	VE::Point closestPt;
 	VE::PolylinePtr element;
 
-	if (ClosestLinePoint(closestPt, element)) {
+	int point_index = ClosestLinePointId(closestPt, element);
+	if (point_index > 0) {
 		std::stringstream stream;
-		stream << std::fixed << std::setprecision(3) << closestPt.x << ", " << closestPt.y;
+		stream << std::fixed << std::setprecision(3) << "[" << point_index << "] " << closestPt.x << ", " << closestPt.y;
 		lInfoText->setText(stream.str().c_str());
 
 		transform.apply(closestPt);
@@ -254,7 +255,7 @@ void ImageViewer::ReleaseSplit(QMouseEvent* event)
 	VE::Point closestPt;
 	VE::PolylinePtr element;
 
-	if (ClosestLinePoint(closestPt, element)) {
+	if (ClosestLinePointId(closestPt, element) >= 0) {
 		vectorGraphic().Split(element, closestPt);
 		ShowMat();
 	}
@@ -297,7 +298,7 @@ void ImageViewer::ReleaseDelete(QMouseEvent* event)
 
 	VE::Point closestPt;
 	VE::PolylinePtr element;
-	if (ClosestLinePoint(closestPt, element)) {
+	if (ClosestLinePointId(closestPt, element) >= 0) {
 		vectorGraphic().Delete(element);
 		ShowMat();
 	}

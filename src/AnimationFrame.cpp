@@ -59,8 +59,9 @@ bool Animation::Frame::Load(std::string image_path, std::string line_path)
 	if (VerifyPath(line_path)) {
 		vectorGraphic.Load(line_path);
 	}
-	else 
+	else {
 		return false;
+	}
 
 	name = std::filesystem::path(image_path).filename().string();
 	replace(line_path, ".l.svg", ".svg");
