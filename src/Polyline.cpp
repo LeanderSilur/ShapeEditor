@@ -62,7 +62,6 @@ namespace VE {
 
 	void Polyline::setPoints(std::vector<Point>& inputPoints)
 	{
-
 		this->points = inputPoints;
 		Cleanup();
 	}
@@ -104,6 +103,7 @@ namespace VE {
 
 	Polyline::Polyline()
 	{
+		std::exception("Default Constructor shouldnt be used.");
 	}
 
 	Polyline::Polyline(std::vector<Point>& points)
@@ -276,38 +276,9 @@ namespace VE {
 		if (!dBounds.Contains(pt))
 			return -1;
 
-		// The Flann Lookup seems to be much slower.
-		//FlannLookupSingle();
-
-		// If we are looking for a point at the exact position, we can use
-		// an optimized search.
-		if (maxDist2 == 0) {
-			for (size_t i = 0; i < points.size(); i++)
-			{
-				if (points[i] == pt) {
-					return i;
-				}
-			}
-			return -1;
-		}
-
-		// If we need the closest point, then we have to find the one
-		// with the smallest distance2.
-		// This means we have to loop through all the points.
-		float minDist2 = maxDist2;
-		int minIndex = -1;
-
-		for (int i = 0; i < points.size(); i++)
-		{
-			float x_ = pt.x - points[i].x;
-			float y_ = pt.y - points[i].y;
-			float dist2 = x_ * x_ + y_ * y_;
-			if (dist2 < minDist2) {
-				minDist2 = dist2;
-				minIndex = i;
-			}
-		}
-		return minIndex;
+		// Use a kd lookup.
+		float dist2 = maxDist2;
+		return tree.nearest(pt, dist2);
 	}
 
 	bool Polyline::removeDoubles()

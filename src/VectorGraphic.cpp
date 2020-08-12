@@ -593,14 +593,10 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 			int indexOther = otherLine->PointIndex(points[i], distances2[j]);
 
 			// Is there a close point on the otherLine?
+			// Then check if there is an intersection or overlap.
 			if (indexOther >= 0) {
-				// Check if there is an intersection or overlap.
-				
-				// Next point is the same.
-				if (otherPoints[indexOther] == points[i + 1])
-					continue;
-				
-				if (otherPoints[indexOther] == points[i]) { // Found point is the same.
+				// Found point maybe the same. => OVERLAP
+				if (otherPoints[indexOther] == points[i]) {
 					// Chop the first segments, if we aren't at the first point anymore,
 					// and store it in the new polyline list.
 					if (i > start) {
@@ -624,8 +620,10 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 						break;
 					}
 				}
-				else { // Found point might intersect.
-					float t, u;
+				// Found point might intersect. => INTERSECTION
+				else {
+					float t = -1,
+						u = -1;
 
 					if (indexOther > 0) {
 						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
@@ -635,17 +633,25 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 					if (!intersectionFound && indexOther < otherPoints.size() - 1) {
 						Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
 					}
-					intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
+
+					// t must no be 0 or 1, because in that case, there is already a point available.
+					intersectionFound = t > 0 && t < 1 && u >= 0 && u <= 1;
 
 					if (intersectionFound) {
+						if (t == 0) {}
 						VE::Point direction = points[i + 1] - points[i];
 						VE::Point intersect = points[i] + direction * t;
-						if (intersect != points[i]) { // Don't get stuck after an intersection.
+						// There may be not enough resolution floats if t is very small.
+						if (intersect == points[i]) {
+							points[i] = intersect;
+							i--;
+						}
+						else {
 							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
-							choppedPoints.back() = intersect;
-
+							choppedPoints.push_back(intersect);
 							result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-							points[i] = choppedPoints.back();
+
+							points[i] = intersect;
 							start = i;
 							i--;
 						}
@@ -669,7 +675,7 @@ void VectorGraphic::RemoveOverlaps()
 	int numberOfPolylines = Polylines.size();
 
 	// The last polyline will not overlap, as all other have been corrected.
-	for (int i = numberOfPolylines; i >= 0; i--)
+	for (int i = numberOfPolylines - 1; i >= 0; i--)
 	{
 		// Take first out.
 		VE::PolylinePtr polyline = Polylines.front();
@@ -677,11 +683,10 @@ void VectorGraphic::RemoveOverlaps()
 
 		decltype(Polylines) newPolylines;
 		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
-
-		for (auto& pl : Polylines) {
+		
+		for (auto& pl : newPolylines) {
 			if (pl->Length() < 2) {
 				std::cout << "FATAL at "<< i << "\n";
-				return;
 			}
 		}
 
