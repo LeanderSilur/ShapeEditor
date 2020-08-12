@@ -24,20 +24,17 @@ namespace VE {
 	const cv::Scalar POLYLINE_COLOR_STD(160, 24, 160);
 	const cv::Scalar POLYLINE_COLOR_LOOP(0, 200, 0);
 	const cv::Scalar POLYLINE_COLOR_INVALID(255, 0, 0);
+	const cv::Scalar POLYLINE_COLOR_ENDS(40, 40, 40);
+
 
 	// Bounds drawing options
 	const int BOUNDS_LINETYPE = cv::LINE_4;
 	const int BOUNDS_LINETHICKNESS = 1;
 	const cv::Scalar BOUNDS_COLOR(255, 0, 255);
 
-	//
+	// Highlighting
 	const cv::Scalar HIGHLIGHT_COLOR(255, 0, 0);
 	const cv::Scalar HIGHLIGHT_CIRCLE_COLOR(170, 150, 30);
-
-
-	// Flannindex search options
-	const int SEARCH_MAX_NEIGHBOURS = 10;
-	const int SEARCH_FLANN_CHECKS = 64; // default 32
 
 
 	// typedefs

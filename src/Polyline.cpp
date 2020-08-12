@@ -187,6 +187,12 @@ namespace VE {
 
 		cv::polylines(img, &pts, &npts, 1, false, color, thickness, POLYLINE_LINETYPE, 0);
 
+		// End and highlighting.
+		if (!circles) {
+			cv::circle(img, tmp.front(), 1, POLYLINE_COLOR_ENDS, 2);
+			cv::circle(img, tmp.back(), 1, POLYLINE_COLOR_ENDS, 2);
+		}
+
 		if (circles) {
 			for (auto&pt:tmp)
 			{
@@ -213,16 +219,16 @@ namespace VE {
 	{
 		Point closest;
 		float distance = FMAX;
-		Closest2(pt, distance, closest);
+		ClosestIdx2(pt, distance, closest);
 		return distance;
 	}
 
-	void Polyline::Closest2(const Point& from, float& distance2, Point& closest)
+	int Polyline::ClosestIdx2(const Point& from, float& distance2, Point& closest)
 	{
 		float maxDist2 = distance2 + maxLength * maxLength / 4 + EPSILON;
 
 		int index = tree.nearest(from, maxDist2);
-		if (index < 0) return;
+		if (index < 0) return -1;
 
 		Point pointOnLine;
 		float distancePrev = FMAX;
@@ -236,22 +242,29 @@ namespace VE {
 
 		if (distance2 > std::min(distancePrev, distanceNext)) {
 			Point other;
+			int otherIdx;
 			if (distancePrev < distanceNext) {
 				distance2 = distancePrev;
-				other = points[index - 1];
+				otherIdx = index - 1;
+				other = points[otherIdx];
 			}
 			else {
 				distance2 = distanceNext;
-				other = points[index + 1];
+				otherIdx = index + 1;
+				other = points[otherIdx];
 			}
 			Point d1 = from - points[index];
 			Point d2 = from - other;
-			if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y)
+			// Why is it always the math, that is missing comments...
+			if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y) {
 				closest = points[index];
-			else
+			}
+			else {
+				index = otherIdx;
 				closest = other;
+			}
 		}
-
+		return index;
 	}
 
 	// Get the Index of the point closest to (param) pt
@@ -299,6 +312,7 @@ namespace VE {
 
 	bool Polyline::removeDoubles()
 	{
+		
 		if (points.size() < 2) return false;
 		size_t initialSize = points.size();
 

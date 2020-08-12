@@ -69,7 +69,7 @@ namespace VE {
 
 		bool AnyPointInRect(VE::Bounds& bounds);
 		float Distance2(Point& pt);
-		void Closest2(
+		int ClosestIdx2(
 			const Point& pt,
 			float& distance2,
 			Point& closest);

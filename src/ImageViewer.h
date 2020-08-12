@@ -84,7 +84,7 @@ private:
 	typedef void (ImageViewer::* QMouseFunc)(QMouseEvent*);
 	QMouseFunc interactionRelease = nullptr;
 
-	bool ClosestLinePoint(VE::Point& closest, VE::PolylinePtr& element);
+	int ClosestLinePointId(VE::Point& closest, VE::PolylinePtr& element);
 
 	// Draw Functions
 	void DrawHighlight(const cv::Scalar & color);

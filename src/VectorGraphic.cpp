@@ -498,10 +498,17 @@ inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Poin
 	const VE::Point r = pr - p;
 	const VE::Point s = qs - q;
 	float rxs = Cross(r, s);
-	if (rxs == 0)
-		throw std::logic_error("Line segments are collinear.");
 
 	const VE::Point pq = q - p;
+
+	if (rxs == 0) {
+		if (Cross(pq, r)) {
+			t = u = std::numeric_limits<float>::max();
+			return;
+		}
+		throw std::logic_error("Line segments are collinear.");
+	}
+
 	t = Cross(pq, s) / rxs;
 	u = Cross(pq, r) / rxs;
 }
@@ -554,7 +561,7 @@ void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
 	int start = 0;
 	std::vector<VE::Point> points = activeLine->getPoints();
 	
-	// Only compare lines with overlapping bounds.
+	// Only compare other lines with overlapping bounds.
 	std::vector<PolylinePtr> others;
 	std::vector<Bounds> otherBounds;
 	std::vector<float> distances2;
@@ -671,15 +678,23 @@ void VectorGraphic::RemoveOverlaps()
 		decltype(Polylines) newPolylines;
 		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
 
+		for (auto& pl : Polylines) {
+			if (pl->Length() < 2) {
+				std::cout << "FATAL at "<< i << "\n";
+				return;
+			}
+		}
+
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
 	}
 	std::cout << "\n";
-	for (auto& pl : Polylines)
+	for (auto& pl : Polylines) {
 		if (pl->Length() < 2) {
 			std::cout << "FATAL\n";
 			//throw std::exception("WTF");
 		}
+	}
 			
 	return;
 }
@@ -1149,31 +1164,38 @@ void VectorGraphic::MakeColorsUnique()
 	}
 }
 
-void VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
+int VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
 	VE::Point& closest, VE::PolylinePtr& element)
 {
 	Bounds bounds(0, 0, img.cols, img.rows);
 	t.applyInv(bounds);
-	ClosestPolyline(bounds, distance2, pt, closest, element);
+	return ClosestPolyline(bounds, distance2, pt, closest, element);
 }
 
-void VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const VE::Point& pt,
+
+int VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const VE::Point& pt,
 	VE::Point& closest, VE::PolylinePtr& element)
 {
-	int id = 0,
-		closest_id = 0;
+	// Closest Line and Point Indices are kept for debugging.
+	// Perhaps this function should simply return indices instead of references.
+	int lineIdx = 0,
+		pointIdx= 0,
+		closestLineIdx = 0,
+		closestPointIdx = 0;
 	for (auto&pl:Polylines) {
 		// Check for visibility first.
 		if (pl->AnyPointInRect(bounds)) {
 			float previous = distance2;
-			pl->Closest2(pt, distance2, closest);
+			pointIdx = pl->ClosestIdx2(pt, distance2, closest);
 			if (previous != distance2) {
 				element = pl;
-				closest_id = id;
+				closestLineIdx = lineIdx;
+				closestPointIdx = pointIdx;
 			}
 		}
-		id++;
+		lineIdx++;
 	}
+	return closestPointIdx;
 }
 
 bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float& maxDist, bool&downwards)

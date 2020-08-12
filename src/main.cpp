@@ -19,12 +19,16 @@ int main(int argc, char* argv[])
 	ShapeEditor se;
 	ImageViewer *iw = new ImageViewer(se.getUi().viewerGrp);
 	iw->ConnectUi(se);
+	if (std::string(argv[1]) == "debug") {
+		std::cout << "In debugging.";
 
+		std::string filename = "D:/190725_sequence_colorization/files/_arc/w.png";
+		Animation::Frame frame(filename, filename + ".svg");
 
-	Animation::Frame frame("D:/190725_sequence_colorization/files/demo/file.png", "D:/190725_sequence_colorization/files/demo/file.png.svg");
-	iw->AddFrame(frame);
-	iw->NextFrame(true);
-	iw->RemoveOverlaps(true);
+		iw->AddFrame(frame);
+		iw->NextFrame(true);
+		//iw->RemoveOverlaps(true);
+	}
 	se.show();
 
 
