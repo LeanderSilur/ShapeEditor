@@ -50,9 +50,13 @@ namespace VE {
 		Polyline(std::vector<Point>& points);
 		~Polyline();
 
+		// First point in Polyline.
 		const Point& Front() { return points.front(); };
+		// Last point in Polyline.
 		const Point& Back() { return points.back(); };
+		// Second point in Polyline.
 		const Point& Front1() { return points[1]; };
+		// Penultimate point in Polyline.
 		const Point& Back1() { return points[points.size() - 2]; };
 
 		std::vector<Connection> ConnectFront;
@@ -67,7 +71,7 @@ namespace VE {
 
 		void Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride = nullptr, bool circles = false);
 
-		bool AnyPointInRect(VE::Bounds& bounds);
+		bool AnyPointInRect(const VE::Bounds & other);
 		float Distance2(Point& pt);
 		int ClosestIdx2(
 			const Point& pt,

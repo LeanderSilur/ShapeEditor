@@ -885,6 +885,7 @@ void VectorGraphic::Split(VE::PolylinePtr pl, VE::Point pt)
 
 	auto it = std::find(orig.begin(), orig.end(), pt);
 
+	std::cout << pl->Length() << "      " << pt << " \n";
 	// edgy cases
 	if (it == orig.begin() ||
 		it == orig.end() - 1) {
@@ -1192,38 +1193,47 @@ void VectorGraphic::MakeColorsUnique()
 	}
 }
 
-int VectorGraphic::ClosestPolyline(cv::Mat& img, VE::Transform& t, float& distance2, const VE::Point& pt,
-	VE::Point& closest, VE::PolylinePtr& element)
+// Gets the closest Point and Polyline to a given Point "target".
+void VectorGraphic::ClosestPolylinePoint(float& distance2, const VE::Point& target,
+	int& ptIdx, VE::Point& closest, VE::PolylinePtr& element,
+	const VE::Bounds* bounds, const float snapEndpoints2)
 {
-	Bounds bounds(0, 0, img.cols, img.rows);
-	t.applyInv(bounds);
-	return ClosestPolyline(bounds, distance2, pt, closest, element);
-}
+	ptIdx = -1;
+	element = nullptr;
 
-
-int VectorGraphic::ClosestPolyline(VE::Bounds& bounds, float& distance2, const VE::Point& pt,
-	VE::Point& closest, VE::PolylinePtr& element)
-{
 	// Closest Line and Point Indices are kept for debugging.
 	// Perhaps this function should simply return indices instead of references.
-	int lineIdx = 0,
-		pointIdx= 0,
-		closestLineIdx = 0,
-		closestPointIdx = 0;
 	for (auto&pl:Polylines) {
 		// Check for visibility first.
-		if (pl->AnyPointInRect(bounds)) {
-			float previous = distance2;
-			pointIdx = pl->ClosestIdx2(pt, distance2, closest);
-			if (previous != distance2) {
-				element = pl;
-				closestLineIdx = lineIdx;
-				closestPointIdx = pointIdx;
+		if (bounds != nullptr &&
+			!bounds->Overlap(pl->getBounds()))
+			continue;
+
+		int index = pl->ClosestIdx2(target, distance2, closest);
+		
+		if (index >= 0) {
+			ptIdx = index;
+			element = pl;
+		}
+	}
+	std::cout << "closest \n";
+	return;
+	// Try snapping endpoints first if requested.
+	if (snapEndpoints2 > 0 && element != nullptr) {
+
+		float startDist2 = VE::Distance2(element->Front(), target);
+		float endDist2 = VE::Distance2(element->Back(), target);
+		if (startDist2 < snapEndpoints2 || endDist2 < snapEndpoints2) {
+			if (startDist2 < endDist2) {
+				ptIdx = 0;
+				closest = element->Front();
+			}
+			else {
+				ptIdx = element->Length() - 1;
+				closest = element->Back();
 			}
 		}
-		lineIdx++;
 	}
-	return closestPointIdx;
 }
 
 bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float& maxDist, bool&downwards)
@@ -1277,6 +1287,9 @@ bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float&
 	}
 	return maxDist < origMaxDist;
 }
+
+
+
 
 
 bool VectorGraphic::ClosestConnectionLeft(const VE::Point& target, std::vector<VE::PolylinePtr>& lines, VE::Connection& result)

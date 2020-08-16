@@ -46,4 +46,10 @@ namespace VE {
 	typedef std::shared_ptr<Polyline> PolylinePtr;
 	typedef std::shared_ptr<Polyshape> PolyshapePtr;
 	typedef std::shared_ptr<ColorArea> ColorAreaPtr;
+
+	static inline float Distance2(const Point& a, const Point& b) {
+		float x = b.x - a.x;
+		float y = b.y - a.y;
+		return x * x + y * y;
+	};
 }

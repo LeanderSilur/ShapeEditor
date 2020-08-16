@@ -14,6 +14,7 @@ class ImageViewer : public QLabel
 
 public:
 	const float HIGHLIGHT_DISTANCE = 64;
+	const float ENDPOINT_SNAPPING_DISTANCE = 32;
 
 	ImageViewer(QWidget* parent = nullptr);
 
@@ -84,7 +85,8 @@ private:
 	typedef void (ImageViewer::* QMouseFunc)(QMouseEvent*);
 	QMouseFunc interactionRelease = nullptr;
 
-	int ClosestLinePointId(VE::Point& closest, VE::PolylinePtr& element);
+	// Get the closest line and point. ptIdx will be -1 if no close points are found.
+	void ClosestLinePoint(int& ptIdx, const VE::Point &target, VE::Point& closest, VE::PolylinePtr & pl, bool snapEndpoints);
 
 	// Draw Functions
 	void DrawHighlight(const cv::Scalar & color);

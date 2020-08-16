@@ -23,28 +23,27 @@ namespace VE {
 			y1 = other.y1;
 		};
 
-		inline float Width() {
+		inline float Width() const {
 			return x1 - x0;
 		};
-		inline float Height() {
+		inline float Height() const {
 			return y1 - y0;
 		};
-		Point Center() {
+		Point Center() const {
 			return Point(x0 + (x1 - x0) / 2, y0 + (y1 - y0) / 2);
 		};
 
-		inline bool Overlap(const Bounds& other)
-		{
+		inline bool Overlap(const Bounds& other) const {
 			return !(other.x0 > x1 ||
 				other.y0 > y1 ||
 				other.x1 < x0 ||
 				other.y1 < y0);
 		};
-		inline bool Contains(const Point& pt) {
+		inline bool Contains(const Point& pt) const {
 			return (pt.x >= x0 && pt.x <= x1 &&
 				pt.y >= y0 && pt.y <= y1);
 		};
-		inline bool Contains(const Bounds& other) {
+		inline bool Contains(const Bounds& other) const {
 			return (x0 < other.x0 &&
 				y0 < other.y0 &&
 				x1 > other.x1 &&
@@ -55,11 +54,11 @@ namespace VE {
 			x1 += padding; y1 += padding;
 		};
 
-		inline float Area() {
+		inline float Area() const {
 			return (x1 - x0) * (y1 - y0);
 		};
 
-		inline cv::Rect2f Rect() {
+		inline cv::Rect2f Rect() const {
 			return cv::Rect2f(x0, y0, x1 - x0, y1 - y0);
 		};
 

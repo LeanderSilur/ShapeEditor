@@ -21,19 +21,14 @@ int main(int argc, char* argv[])
 	iw->ConnectUi(se);
 	if (std::string(argv[1]) == "debug") {
 		std::cout << "In debugging.";
-
-		std::string filename = "D:/190725_sequence_colorization/files/_arc/w.png";
-		Animation::Frame frame(filename, filename + ".svg");
+		std::string filename = "D:/download/malila3_09/OUT_A/0076.png";
+		Animation::Frame frame(filename, filename + ".l.svg");
 
 		iw->AddFrame(frame);
 		iw->NextFrame(true);
 		//iw->RemoveOverlaps(true);
 	}
+
 	se.show();
-
-
-
-	
-
 	return a.exec();
 }

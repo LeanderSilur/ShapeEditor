@@ -208,7 +208,7 @@ namespace VE {
 		}
 	}
 
-	bool Polyline::AnyPointInRect(VE::Bounds& other)
+	bool Polyline::AnyPointInRect(const VE::Bounds & other)
 	{
 		if (!other.Overlap(bounds))
 			return false;

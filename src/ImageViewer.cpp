@@ -135,51 +135,54 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 	interactionButtons[InteractionMode::Examine]->click();
 }
 
-int ImageViewer::ClosestLinePointId(VE::Point& closest, VE::PolylinePtr& element)
+// Get the closest element and point to the target.
+// Target point is given in viewport transformed space.
+void ImageViewer::ClosestLinePoint(int& ptIdx, const VE::Point& target, VE::Point& closest, VE::PolylinePtr & pl, bool snapEndpoints)
 {
-	// Get the closest element and point to the mouse.
-	element = nullptr;
-	VE::Point mousePos = VEMousePosition();
-	transform.applyInv(mousePos);
+	VE::Bounds bounds(0, 0, display.cols, display.rows);
+	transform.applyInv(bounds);
 
-	float maxDist = HIGHLIGHT_DISTANCE / transform.scale;
-	float maxDist2 = maxDist * maxDist;
-	float distance2 = maxDist2;
+	VE::Point tTarget = target;
+	transform.applyInv(tTarget);
 
-
-	int point_id = vectorGraphic().ClosestPolyline(
-		display, transform, distance2,
-		mousePos, closest, element);
-
-	return point_id;
+	const float
+		maxDist = HIGHLIGHT_DISTANCE / transform.scale,
+		maxDist2 = maxDist * maxDist,
+		maxDistEnd = ENDPOINT_SNAPPING_DISTANCE / transform.scale,
+		maxDistEnd2 = maxDistEnd * maxDistEnd;
+	float dist2 = maxDist2;
+	vectorGraphic().ClosestPolylinePoint(
+		dist2, tTarget, ptIdx, closest, pl, &bounds, maxDistEnd2);
 }
 
 void ImageViewer::DrawHighlight(const cv::Scalar & color)
 {
+	int ptIdx;
 	VE::Point closestPt;
-	VE::PolylinePtr element;
+	VE::PolylinePtr pl;
+	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
 
-	if (ClosestLinePointId(closestPt, element) >= 0) {
-		element->Draw(display, transform, &color, false);
+	if (ptIdx >= 0) {
+		pl->Draw(display, transform, &color, false);
 	}
 }
 
 void ImageViewer::DrawHighlightPoints(const cv::Scalar & color)
 {
+	int ptIdx;
 	VE::Point closestPt;
-	VE::PolylinePtr element;
-
-	int point_index = ClosestLinePointId(closestPt, element);
+	VE::PolylinePtr pl;
+	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
 	
-	if (point_index >= 0) {
+	if (ptIdx >= 0) {
 		std::stringstream stream;
-		stream << std::fixed << std::setprecision(3) << "[" << point_index << "] " << closestPt.x << ", " << closestPt.y;
+		stream << std::fixed << std::setprecision(3) << "[" << ptIdx << "] " << closestPt.x << ", " << closestPt.y;
 		lInfoText->setText(stream.str().c_str());
 
 		transform.apply(closestPt);
 
 		cv::circle(display, closestPt, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
-		element->Draw(display, transform, &color, true);
+		pl->Draw(display, transform, &color, true);
 	}
 }
 
@@ -193,53 +196,40 @@ void ImageViewer::DrawSplit()
 	DrawHighlightPoints(POLYLINE_SPLIT);
 }
 
-bool GetClosestEndPoint(const float& maxDist2, VE::Bounds &bounds, VectorGraphic& vg, VE::Point& pos)
-{
-	float distance2 = maxDist2;
-	VE::Point origin = pos;
-	vg.ClosestEndPoint(bounds, distance2, origin, pos);
-
-	return distance2 < maxDist2;
-}
-
 void ImageViewer::DrawConnect()
 {
 	VE::Bounds bounds(0, 0, display.cols, display.rows);
 	transform.applyInv(bounds);
 
-	float maxDist = HIGHLIGHT_DISTANCE / transform.scale,
-		maxDist2_1 = maxDist * maxDist,
-		maxDist2_2 = maxDist2_1;
 
 	VE::Point pos1 = VE::Point(mousePressPos.x(), mousePressPos.y());
 	VE::Point pos2 = VEMousePosition();
+	int ptIdx1, ptIdx2;
+	VE::Point closestPt1, closestPt2;
+	VE::PolylinePtr pl1, pl2;
 
-	transform.applyInv(pos1);
-	transform.applyInv(pos2);
+	ClosestLinePoint(ptIdx1, pos1, closestPt1, pl1, true);
+	bool pos1_valid = ptIdx1 >= 0;
+	if (pos1_valid) transform.apply(closestPt1);
 
-	VE::Point pos2_orig = pos2;
+	if (lmbHold && !pos1_valid) return;
 
-	bool pos1_valid = GetClosestEndPoint(maxDist2_1, bounds, vectorGraphic(), pos1);
-	if (lmbHold && !pos1_valid)
-		return;
-	bool pos2_valid = GetClosestEndPoint(maxDist2_2, bounds, vectorGraphic(), pos2);
-	if (lmbHold && pos1 == pos2) {
-		pos2_valid = false;
-		pos2 = pos2_orig;
-	}
 
-	transform.apply(pos1);
-	transform.apply(pos2);
+	ClosestLinePoint(ptIdx2, pos2, closestPt2, pl2, true);
+	bool pos2_valid = ptIdx2 >= 0;
+	if (pos2_valid) transform.apply(closestPt2);
 
-	if (lmbHold && pos1_valid) {
-		cv::line(display, pos1, pos2, POLYLINE_CONNECT_LINE, 2, cv::LINE_AA);
-		cv::circle(display, pos1, 4, POLYLINE_CONNECT1, cv::FILLED);
+	if (lmbHold && (!pos2_valid || closestPt1 == closestPt2))
+		closestPt2 = pos2;
+
+	if (lmbHold) {
+		cv::line(display, closestPt1, closestPt2, POLYLINE_CONNECT_LINE, 2, cv::LINE_AA);
+		if (pos1_valid)
+			cv::circle(display, closestPt1, 4, POLYLINE_CONNECT1, cv::FILLED);
 	}
 	if (pos2_valid) {
-		cv::Scalar pos2Color = POLYLINE_CONNECT1;
-		if (lmbHold)
-			pos2Color = POLYLINE_CONNECT2;
-		cv::circle(display, pos2, 6, pos2Color, cv::FILLED);
+		cv::circle(display, closestPt2, 6,
+			lmbHold ? POLYLINE_CONNECT2 : POLYLINE_CONNECT1, cv::FILLED);
 	}
 }
 
@@ -253,11 +243,13 @@ void ImageViewer::ReleaseSplit(QMouseEvent* event)
 	if (event->button() != Qt::LeftButton)
 		return;
 
+	int ptIdx;
 	VE::Point closestPt;
-	VE::PolylinePtr element;
+	VE::PolylinePtr pl;
+	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
 
-	if (ClosestLinePointId(closestPt, element) >= 0) {
-		vectorGraphic().Split(element, closestPt);
+	if (ptIdx >= 0) {
+		vectorGraphic().Split(pl, closestPt);
 		ShowMat();
 	}
 }
@@ -270,26 +262,33 @@ void ImageViewer::ReleaseConnect(QMouseEvent* event)
 	VE::Bounds bounds(0, 0, display.cols, display.rows);
 	transform.applyInv(bounds);
 
-	float maxDist = HIGHLIGHT_DISTANCE / transform.scale,
-		maxDist2_1 = maxDist * maxDist,
-		maxDist2_2 = maxDist2_1;
 
 	VE::Point pos1 = VE::Point(mousePressPos.x(), mousePressPos.y());
 	VE::Point pos2 = VEMousePosition();
+	int ptIdx1, ptIdx2;
+	VE::Point closestPt1, closestPt2;
+	VE::PolylinePtr pl1, pl2;
 
-	transform.applyInv(pos1);
-	transform.applyInv(pos2);
+	ClosestLinePoint(ptIdx1, pos1, closestPt1, pl1, true);
+	ClosestLinePoint(ptIdx2, pos2, closestPt2, pl2, true);
+	if (ptIdx1 < 0 || ptIdx2 < 0)
+		return;
 
-	bool pos1_valid = GetClosestEndPoint(maxDist2_1, bounds, vectorGraphic(), pos1);
-	bool pos2_valid = GetClosestEndPoint(maxDist2_2, bounds, vectorGraphic(), pos2);
-	if (!pos1_valid || !pos2_valid || pos1 == pos2) {
-		std::cout << "Connect failed.\n";
-	}
-	else {
-		std::vector<VE::Point> points = { pos1, pos2 };
-		vectorGraphic().AddPolyline(points);
-	}
-	ShowMat();
+	if (closestPt1 == closestPt2)
+		return;
+
+	// Create new Line Segment.
+	std::vector<VE::Point> points = { closestPt1, closestPt2 };
+	vectorGraphic().AddPolyline(points);
+
+	if (pl1 == pl2) return;
+
+	if (ptIdx1 != 0 && ptIdx1 != pl1->Length() - 1)
+		vectorGraphic().Split(pl1, closestPt1);
+
+	if (ptIdx2 != 0 && ptIdx2 != pl2->Length() - 1)
+		vectorGraphic().Split(pl2, closestPt2);
+	//ShowMat();
 }
 
 void ImageViewer::ReleaseDelete(QMouseEvent* event)
@@ -297,10 +296,13 @@ void ImageViewer::ReleaseDelete(QMouseEvent* event)
 	if (event->button() != Qt::LeftButton)
 		return;
 
+	int ptIdx;
 	VE::Point closestPt;
-	VE::PolylinePtr element;
-	if (ClosestLinePointId(closestPt, element) >= 0) {
-		vectorGraphic().Delete(element);
+	VE::PolylinePtr pl;
+	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
+
+	if (ptIdx >= 0) {
+		vectorGraphic().Delete(pl);
 		ShowMat();
 	}
 }
@@ -431,19 +433,18 @@ void ImageViewer::Frame(const VE::Bounds& bounds)
 
 void ImageViewer::FrameSelected()
 {
-	// highlight closest
-	VE::Point result;
-	VE::PolylinePtr element;
-	auto qmouse = QMousePosition();
-	VE::Point mousePos(qmouse.x(), qmouse.y());
+	VE::Point mousePos = VEMousePosition();
 	transform.applyInv(mousePos);
 
 	float distance = HIGHLIGHT_DISTANCE / transform.scale;
-	vectorGraphic().ClosestPolyline(
-		display, transform, distance,
-		mousePos, result, element);
-	if (element != nullptr) {
-		Frame(element->getBounds());
+
+	int ptIdx;
+	VE::Point result;
+	VE::PolylinePtr pl;
+	ClosestLinePoint(ptIdx, mousePos, result, pl, false);
+
+	if (ptIdx >= 0) {
+		Frame(pl->getBounds());
 	}
 }
 
@@ -494,6 +495,7 @@ void ImageViewer::mousePressEvent(QMouseEvent * event)
 {
 	// TODO differentiate this
 	if (event->button() == Qt::LeftButton) {
+
 		mousePressPos = event->pos();
 		mousePrevPos = event->pos();
 		lmbHold = true;
