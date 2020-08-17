@@ -151,8 +151,9 @@ void ImageViewer::ClosestLinePoint(int& ptIdx, const VE::Point& target, VE::Poin
 		maxDistEnd = ENDPOINT_SNAPPING_DISTANCE / transform.scale,
 		maxDistEnd2 = maxDistEnd * maxDistEnd;
 	float dist2 = maxDist2;
+
 	vectorGraphic().ClosestPolylinePoint(
-		dist2, tTarget, ptIdx, closest, pl, &bounds, maxDistEnd2);
+		dist2, tTarget, ptIdx, closest, pl, &bounds, snapEndpoints ? maxDistEnd2 : 0.0);
 }
 
 void ImageViewer::DrawHighlight(const cv::Scalar & color)
@@ -249,7 +250,7 @@ void ImageViewer::ReleaseSplit(QMouseEvent* event)
 	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
 
 	if (ptIdx >= 0) {
-		vectorGraphic().Split(pl, closestPt);
+		vectorGraphic().Split(pl, ptIdx);
 		ShowMat();
 	}
 }
@@ -281,13 +282,14 @@ void ImageViewer::ReleaseConnect(QMouseEvent* event)
 	std::vector<VE::Point> points = { closestPt1, closestPt2 };
 	vectorGraphic().AddPolyline(points);
 
-	if (pl1 == pl2) return;
-
-	if (ptIdx1 != 0 && ptIdx1 != pl1->Length() - 1)
-		vectorGraphic().Split(pl1, closestPt1);
-
-	if (ptIdx2 != 0 && ptIdx2 != pl2->Length() - 1)
-		vectorGraphic().Split(pl2, closestPt2);
+	if (pl1 == pl2) {
+		std::vector<int> indices { ptIdx1, ptIdx2 };
+		vectorGraphic().Split(pl1, indices);
+	}
+	else {
+		vectorGraphic().Split(pl1, ptIdx1);
+		vectorGraphic().Split(pl2, ptIdx2);
+	}
 	//ShowMat();
 }
 
@@ -433,15 +435,10 @@ void ImageViewer::Frame(const VE::Bounds& bounds)
 
 void ImageViewer::FrameSelected()
 {
-	VE::Point mousePos = VEMousePosition();
-	transform.applyInv(mousePos);
-
-	float distance = HIGHLIGHT_DISTANCE / transform.scale;
-
 	int ptIdx;
 	VE::Point result;
 	VE::PolylinePtr pl;
-	ClosestLinePoint(ptIdx, mousePos, result, pl, false);
+	ClosestLinePoint(ptIdx, VEMousePosition(), result, pl, false);
 
 	if (ptIdx >= 0) {
 		Frame(pl->getBounds());

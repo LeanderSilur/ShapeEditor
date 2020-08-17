@@ -74,8 +74,8 @@ namespace VE {
 	const std::vector<Point>& Polyline::getSimplified(float maxDist2)
 	{
 		if (simple_maxDist2 != maxDist2) {
-			UpdateSimplifiedPoints();
 			simple_maxDist2 = maxDist2;
+			UpdateSimplifiedPoints();
 		}
 		return simplifiedPoints;
 	}
@@ -173,7 +173,6 @@ namespace VE {
 		t.applyInv(minDist);
 		float minDist2 = minDist * minDist;
 
-
 		// Create a copy, then simplify it according to the Transforms mindist2.
 		auto drawPoints = getSimplified(minDist2);
 
@@ -222,51 +221,61 @@ namespace VE {
 	float Polyline::Distance2(Point& pt)
 	{
 		Point closest;
-		float distance = FMAX;
-		ClosestIdx2(pt, distance, closest);
-		return distance;
+		float distance2 = FMAX;
+		int index = ClosestPt2(pt, distance2);
+
+		return distance2;
 	}
 
-	int Polyline::ClosestIdx2(const Point& from, float& distance2, Point& closest)
+	// Returns the closest point.
+	int Polyline::ClosestPt2(const Point& target, float& distance2)
+	{
+		return tree.nearest(target, distance2);
+	}
+
+	// Returns the point closest to the closest point on the line.
+	int Polyline::ClosestLinePt2(const Point& target, float& distance2, Point& closest)
 	{
 		float maxDist2 = distance2 + maxLength * maxLength / 4 + EPSILON;
 
-		int index = tree.nearest(from, maxDist2);
+		int index = tree.nearest(target, maxDist2);
 		if (index < 0) return -1;
 
 		Point pointOnLine;
 		float distancePrev = FMAX;
 		float distanceNext = FMAX;
 		if (index > 0) {
-			distancePrev = distancePointLine2(points[index], points[index - 1], from, pointOnLine);
+			distancePrev = distancePointLine2(points[index], points[index - 1], target, pointOnLine);
 		}
 		if (index < (int)points.size() - 1) {
-			distanceNext = distancePointLine2(points[index], points[index + 1], from, pointOnLine);
+			distanceNext = distancePointLine2(points[index], points[index + 1], target, pointOnLine);
 		}
 
-		if (distance2 > std::min(distancePrev, distanceNext)) {
-			Point other;
-			int otherIdx;
-			if (distancePrev < distanceNext) {
-				distance2 = distancePrev;
-				otherIdx = index - 1;
-				other = points[otherIdx];
-			}
-			else {
-				distance2 = distanceNext;
-				otherIdx = index + 1;
-				other = points[otherIdx];
-			}
-			Point d1 = from - points[index];
-			Point d2 = from - other;
-			// Why is it always the math, that is missing comments...
-			if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y) {
-				closest = points[index];
-			}
-			else {
-				index = otherIdx;
-				closest = other;
-			}
+		if (std::min(distancePrev, distanceNext) > distance2)
+			return -1;
+
+		// Otherwise one of the adjacent points or the closest point is closer than distance2.
+		Point other;
+		int otherIdx;
+		if (distancePrev < distanceNext) {
+			distance2 = distancePrev;
+			otherIdx = index - 1;
+			other = points[otherIdx];
+		}
+		else {
+			distance2 = distanceNext;
+			otherIdx = index + 1;
+			other = points[otherIdx];
+		}
+		Point d1 = target - points[index];
+		Point d2 = target - other;
+		// Pythagorean comparison of d1 & d2.
+		if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y) {
+			closest = points[index];
+		}
+		else {
+			index = otherIdx;
+			closest = other;
 		}
 		return index;
 	}

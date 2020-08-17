@@ -73,10 +73,8 @@ namespace VE {
 
 		bool AnyPointInRect(const VE::Bounds & other);
 		float Distance2(Point& pt);
-		int ClosestIdx2(
-			const Point& pt,
-			float& distance2,
-			Point& closest);
+		int ClosestPt2(const Point& target, float& distance2);
+		int ClosestLinePt2(const Point& target, float& distance2, Point& closest);
 
 		int PointIndex(const Point& pt, const float& maxDist2 = 0);
 		bool LongEnough() { return points.size() >= 2; };

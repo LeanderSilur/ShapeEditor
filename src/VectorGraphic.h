@@ -35,7 +35,8 @@ public:
 	void RemoveUnusedConnections();
 
 	// Lines
-	void Split(VE::PolylinePtr pl, VE::Point pt);
+	void Split(VE::PolylinePtr pl, const int& idx);
+	void Split(VE::PolylinePtr pl, const std::vector<int> indices);
 	//void Connect(VE::Connection& a, VE::Connection& b);
 	void Delete(VE::PolylinePtr line);
 

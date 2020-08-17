@@ -707,12 +707,6 @@ void VectorGraphic::RemoveOverlaps()
 		decltype(Polylines) newPolylines;
 		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
 		
-		for (auto& pl : newPolylines) {
-			if (pl->Length() < 2) {
-				std::cout << "FATAL at "<< i << "\n";
-			}
-		}
-
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
 	}
@@ -878,30 +872,42 @@ void VectorGraphic::RemoveUnusedConnections()
 	Polylines = std::move(validLines);
 }
 
-void VectorGraphic::Split(VE::PolylinePtr pl, VE::Point pt)
+void VectorGraphic::Split(VE::PolylinePtr pl, const int& idx)
+{
+	std::vector<int> indices{ idx };
+	Split(pl, indices);
+}
+
+void VectorGraphic::Split(VE::PolylinePtr pl, const std::vector<int> indices)
 {
 	auto& orig = pl->getPoints();
-	std::vector<VE::Point> front, back;
 
-	auto it = std::find(orig.begin(), orig.end(), pt);
-
-	std::cout << pl->Length() << "      " << pt << " \n";
-	// edgy cases
-	if (it == orig.begin() ||
-		it == orig.end() - 1) {
-		return;
-	}
-	if (it == orig.end()) {
-		throw std::invalid_argument("Point not on polyline.");
+	for (const int& idx : indices) {
+		if (idx < 0 || idx >= orig.size())
+			throw std::invalid_argument("Point not on polyline.");
 	}
 
-	front.insert(front.end(), orig.begin(), it + 1);
-	back.insert(back.end(), it, orig.end());
-
+	std::vector<int> sIndices(indices);
+	sort(sIndices.begin(), sIndices.end());
+	
 	Polylines.erase(std::find(Polylines.begin(), Polylines.end(), pl));
 	DeleteConnections(pl);
-	Polylines.push_back(std::make_shared<VE::Polyline>(front));
-	Polylines.push_back(std::make_shared<VE::Polyline>(back));
+
+	int last = 0;
+	for (int i = 0; i < sIndices.size(); i++)
+	{
+		if (sIndices[i] <= last)
+			continue;
+
+		std::vector<VE::Point> splitPoints(orig.begin() + last, orig.begin() + sIndices[i] + 1);
+		Polylines.push_back(std::make_shared<VE::Polyline>(splitPoints));
+
+		last = sIndices[i];
+	}
+	if (last < orig.size() - 1) {
+		std::vector<VE::Point> splitPoints(orig.begin() + last, orig.end());
+		Polylines.push_back(std::make_shared<VE::Polyline>(splitPoints));
+	}
 }
 
 /*
@@ -1209,18 +1215,16 @@ void VectorGraphic::ClosestPolylinePoint(float& distance2, const VE::Point& targ
 			!bounds->Overlap(pl->getBounds()))
 			continue;
 
-		int index = pl->ClosestIdx2(target, distance2, closest);
+		int index = pl->ClosestLinePt2(target, distance2, closest);
 		
 		if (index >= 0) {
 			ptIdx = index;
 			element = pl;
 		}
 	}
-	std::cout << "closest \n";
-	return;
+
 	// Try snapping endpoints first if requested.
 	if (snapEndpoints2 > 0 && element != nullptr) {
-
 		float startDist2 = VE::Distance2(element->Front(), target);
 		float endDist2 = VE::Distance2(element->Back(), target);
 		if (startDist2 < snapEndpoints2 || endDist2 < snapEndpoints2) {
