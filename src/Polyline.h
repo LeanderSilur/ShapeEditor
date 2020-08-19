@@ -23,7 +23,6 @@ namespace VE {
 
 		bool removeDoubles();
 		void calculateKDTree();
-		float distancePointLine2(const Point& u, const Point& v, const Point& p, Point& result);
 
 		LineStat getStatus();
 		int FlannLookupSingle(const Point &pt, const float& maxDist2);

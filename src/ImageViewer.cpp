@@ -10,6 +10,7 @@
 #include <opencv2/imgproc.hpp>
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <sstream>
 #include <filesystem>
 
@@ -33,6 +34,8 @@ ImageViewer::ImageViewer(QWidget* parent)
 	
 	transform.Reset();
 	ActiveColor->Color = cv::Scalar(120, 160, 140);
+
+	WorkingDirRead();
 
 	 //todo resizing
 	cv::Mat s = cv::Mat(cv::Size(width(), height()), CV_8UC3);
@@ -174,10 +177,14 @@ void ImageViewer::DrawHighlightPoints(const cv::Scalar & color)
 	VE::Point closestPt;
 	VE::PolylinePtr pl;
 	ClosestLinePoint(ptIdx, VEMousePosition(), closestPt, pl, false);
+
+
+	int plIdx = std::distance(vectorGraphic().Polylines.begin(),
+		std::find(vectorGraphic().Polylines.begin(), vectorGraphic().Polylines.end(), pl));
 	
 	if (ptIdx >= 0) {
 		std::stringstream stream;
-		stream << std::fixed << std::setprecision(3) << "[" << ptIdx << "] " << closestPt.x << ", " << closestPt.y;
+		stream << std::fixed << std::setprecision(3) << "[" << plIdx << ", " << ptIdx << "] " << closestPt.x << ", " << closestPt.y;
 		lInfoText->setText(stream.str().c_str());
 
 		transform.apply(closestPt);
@@ -411,7 +418,10 @@ void ImageViewer::ShowMat()
 
 	// Draw the vector elements.
 	vectorGraphic().Draw(display, transform);
-
+	
+	cv::Scalar c(255, 255, 255);
+	if (vectorGraphic().Polylines.size() >= 28)
+	vectorGraphic().Polylines[29]->Draw(display, transform, &c, false);
 
 	if (interactionDraw != nullptr) {
 		(this->*interactionDraw)();
@@ -486,6 +496,28 @@ bool ImageViewer::ShiftPressed()
 bool ImageViewer::AltPressed()
 {
 	return QGuiApplication::keyboardModifiers() == Qt::AltModifier;
+}
+
+void ImageViewer::WorkingDirSave()
+{
+	std::ofstream directoryFile;
+	directoryFile.open("directory");
+	directoryFile << WORKING_DIRECTORY;
+	directoryFile.close();
+}
+
+void ImageViewer::WorkingDirRead()
+{
+	if (std::filesystem::exists(std::filesystem::path("directory"))) {
+		std::ifstream directoryFile("directory");
+		if (directoryFile.is_open())
+		{
+			WORKING_DIRECTORY = std::string((std::istreambuf_iterator<char>(directoryFile)),
+				std::istreambuf_iterator<char>());
+
+			directoryFile.close();
+		}
+	}
 }
 
 void ImageViewer::mousePressEvent(QMouseEvent * event)
@@ -897,7 +929,8 @@ void ImageViewer::FileSetDirectory(bool checked)
 		WORKING_DIRECTORY.c_str()).toStdString();
 
 	auto directory = std::filesystem::path(directoryName);
-	if (std::filesystem::is_directory(directory))
+	if (std::filesystem::is_directory(directory)) {
 		WORKING_DIRECTORY = directoryName;
-
+		WorkingDirSave();
+	}
 }

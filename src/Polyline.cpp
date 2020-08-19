@@ -4,33 +4,6 @@
 
 namespace VE {
 
-	float Polyline::distancePointLine2(const Point& u, const Point& v, const Point& p, Point& result)
-	{
-		// |v-u|^2 
-		const Point uv = v - u;
-		Point closest = u;
-		result = u;
-		const float l2 = uv.x * uv.x + uv.y * uv.y;
-		if (l2 != 0.0f) {
-			const float t = (p - u).dot(uv) / l2;
-
-			if (t >= 1) {
-				closest = v;
-				result = v;
-			}
-			else {
-				if (t >= 0.5f)
-					result = v;
-				if (t >= 0.f)
-					closest = u + t * uv;
-			}
-		}
-
-		closest -= p;
-
-		return closest.x * closest.x + closest.y * closest.y;
-	}
-
 	Polyline::LineStat Polyline::getStatus()
 	{
 		// check loop
@@ -245,10 +218,10 @@ namespace VE {
 		float distancePrev = FMAX;
 		float distanceNext = FMAX;
 		if (index > 0) {
-			distancePrev = distancePointLine2(points[index], points[index - 1], target, pointOnLine);
+			distancePrev = VE::DistancePointLine2(points[index], points[index - 1], target, pointOnLine);
 		}
 		if (index < (int)points.size() - 1) {
-			distanceNext = distancePointLine2(points[index], points[index + 1], target, pointOnLine);
+			distanceNext = VE::DistancePointLine2(points[index], points[index + 1], target, pointOnLine);
 		}
 
 		if (std::min(distancePrev, distanceNext) > distance2)

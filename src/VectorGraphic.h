@@ -16,7 +16,10 @@ private:
 	inline float GetConnectionAngle(const VE::Connection& conA, const VE::Connection& conB);
 
 	void DeleteConnections(VE::PolylinePtr ptr);
+
 public:
+	static const float MERGE_DISTANCE;
+	static const float MERGE_DISTANCE2;
 
 	VectorGraphic() { };
 
@@ -29,7 +32,9 @@ public:
 	void SavePolyshapes(std::string path, std::string image_path, cv::Size2i shape);
 
 	void SnapEndpoints(const float& snappingDistance2);
-	void RemoveOverlaps();
+private: void GetNoneOverlappingLines(std::vector<VE::Point>& points, std::vector<VE::PolylinePtr>& result,
+	const std::vector<VE::PolylinePtr> others, const std::vector<VE::Bounds> paddedBounds, const std::vector<float> distances2);
+public: void RemoveOverlaps();
 	void MergeConnected(const float& minMergeAngle);
 	void ComputeConnectionStatus();
 	void RemoveUnusedConnections();

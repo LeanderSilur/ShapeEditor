@@ -125,6 +125,9 @@ void VectorGraphic::DeleteConnections(VE::PolylinePtr ptr)
 
 
 
+const float VectorGraphic::MERGE_DISTANCE = 1e-6;
+const float VectorGraphic::MERGE_DISTANCE2 = 1e-3;
+
 
 const char* quotationMark = "\"'";
 const char* whitespace = "\t ";
@@ -489,206 +492,262 @@ void VectorGraphic::SnapEndpoints(const float& pSnappingDistance2)
 	std::cout << " done.\n";
 }
 
-inline float Cross(const VE::Point& a, const VE::Point& b) {
-	return a.x * b.y - a.y * b.x;
+
+void LinesWithPaddedBounds(const VE::PolylinePtr& activeLine,
+	const std::vector<PolylinePtr>& otherLines,
+	std::vector<PolylinePtr>& othersSelected, std::vector<Bounds>& paddedBounds, std::vector<float>& distances2)
+{
+	othersSelected.clear();
+	paddedBounds.clear();
+	distances2.clear();
+
+	for (auto other = otherLines.begin(); other != otherLines.end(); other++)
+	{
+		if (!activeLine->getBounds().Overlap((*other)->getBounds()))
+			continue;
+		othersSelected.push_back(*other);
+		Bounds bounds = (*other)->getBounds();
+		float padding = activeLine->getMaxLength() * 0.5001;
+		bounds.Pad(padding);
+		paddedBounds.push_back(bounds);
+
+		float distanceSum2 = activeLine->getMaxLength() * activeLine->getMaxLength() / 4
+			+ (*other)->getMaxLength() * (*other)->getMaxLength() / 4
+			+ 5 * FLT_EPSILON;
+		distances2.push_back(distanceSum2);
+	}
 }
 
-class CollinearityException : public std::exception
+// Check if a dot product is within few degrees (1°) of a zero angle.
+inline bool AngleIsZero(const float& dotProduct) { return dotProduct >= 0.9998f; }
+
+// Use this function for case 1x when a congruent point is found. (Case 1)
+// Functions checks if line is parallel and if a segment can be (partially) skipped.
+// It would replace the skipTo [t, pt].
+inline void SkipSplit_PointIntersect(const VE::Point& a1, const VE::Point& a2, const VE::Point& b2,
+	float& skipToAt, VE::Point& skipToPt)
 {
-public:
-	CollinearityException() {};
-};
+	const VE::Point& aDir = a2 - a1;
+	const VE::Point& bDir = b2 - a1;
+	const float& aMag2 = VE::Magnitude2(aDir);
+	const float& bMag2 = VE::Magnitude2(bDir);
 
+	const float angle = VE::Dot(aDir, bDir) / (aMag2 * bMag2);
+	if (AngleIsZero(angle)) {
+		std::cout << "anglezero1\n";
+		const float t = bMag2 / aMag2;
+		if (t > skipToAt) {
+			skipToAt = t;
+			skipToPt = b2;
+		}
+	}
+}
 
-// Intersection
-inline void Intersection(const VE::Point& p, const VE::Point& pr, const VE::Point& q, const VE::Point& qs, float&t, float&u) {
-	const VE::Point r = pr - p;
-	const VE::Point s = qs - q;
-	float rxs = Cross(r, s);
+// Use this function for case 1x when NO congruent point is found. (Case 2 & 3)
+inline void SkipSplit_ClosePoints(const VE::Point& a1, const VE::Point& a2, const VE::Point& b1, const VE::Point& b2,
+	bool& startSplit, float& splitAt, VE::Point& splitPt, float& skipToAt, VE::Point& skipToPt,
+	const float& MERGE_DISTANCE, const float& MERGE_DISTANCE2) {
+	const VE::Point& aDir = a2 - a1;
+	const VE::Point& bDir = b2 - b1;
+	const float& aMag2 = VE::Magnitude2(aDir);
+	const float& bMag2 = VE::Magnitude2(bDir);
 
-	const VE::Point pq = q - p;
+	std::cout << "inside\n";
 
-	if (rxs == 0) {
-		if (Cross(pq, r)) {
-			t = u = std::numeric_limits<float>::max();
+	const float angle = VE::Dot(aDir, bDir) / (std::sqrt(aMag2) * std::sqrt(bMag2));
+	// Check if the lines are parallel.
+	if (AngleIsZero(std::abs(angle))) {
+		std::cout << "anglezero2\n";
+		// Check Distance from "other" point to current line segment.
+		float t1 = (b1 - a1).dot(aDir) / aMag2;
+		const VE::Point closest_b1 = a1 + t1 * aDir;
+		const float dist2_b1 = VE::Magnitude2(b1 - closest_b1);
+
+		if (dist2_b1 > MERGE_DISTANCE2)
 			return;
+
+		float t2 = (b2 - a1).dot(aDir) / aMag2;
+		
+		bool swap = false;
+		if (t1 > t2) {
+			float tmp = t2;
+			t2 = t1;
+			t1 = t2;
+			swap = true;
 		}
-		throw CollinearityException();
-	}
 
-	t = Cross(pq, s) / rxs;
-	u = Cross(pq, r) / rxs;
-}
-
-// trace in direction to determine overlap
-// starting at lineA[a] == lineB[b]
-// "end" is the last point which is the same for A and B
-void TraceOverlap(const std::vector<VE::Point>& lineA, const std::vector<VE::Point>& lineB, int& a, int b) {
-	int traceDir;
-	int exitB;
-
-	// trace B forwards (else backwards)
-	if (lineB.size() != b + 1 && lineA[a + 1] == lineB[b + 1]) {
-		traceDir = 1;
-		exitB = lineB.size();
-	}
-	else if (-1 != b - 1 && lineA[a + 1] == lineB[b - 1]) {
-		traceDir = -1;
-		exitB = -1;
-	}
-	else {
-		// only initial point is the same
-		return;
-	}
-
-	while (true) {
-		a++;
-		b += traceDir;
-
-		if (a == lineA.size() ||
-			b == exitB ||
-			lineA[a] != lineB[b])
-		{
-			break;
+		if (t2 < 0 || t1 >= 1) return;
+		if (t1 <= 0) {
+			startSplit = true;
+			if (t2 > skipToAt) {
+				skipToAt = t2;
+				skipToPt = swap ? b1 : b2;
+			}
 		}
-	}
-	// decrement a to get to the last working point
-	a--;
-	return;
-}
-
-// Params
-// points		the path
-// others		all the other polylines
-// result		whatever remains from the path
-void GetNoneOverlappingLines(VE::PolylinePtr activeLine,
-	const std::vector<PolylinePtr>::iterator& othersBegin, const std::vector<PolylinePtr>::iterator& othersEnd,
-	std::vector<PolylinePtr>& result)
-{
-	int start = 0;
-	std::vector<VE::Point> points = activeLine->getPoints();
-	
-	// Only compare other lines with overlapping bounds.
-	std::vector<PolylinePtr> others;
-	std::vector<Bounds> otherBounds;
-	std::vector<float> distances2;
-	for (auto other = othersBegin; other != othersEnd; other++)
-	{
-		if (activeLine->getBounds().Overlap((*other)->getBounds())) {
-			others.push_back(*other);
-			Bounds bounds = (*other)->getBounds();
-			float padding = activeLine->getMaxLength() * 0.5 * 0.7072;
-			bounds.Pad(padding);
-			otherBounds.push_back(bounds);
-
-			float distanceSum2 = activeLine->getMaxLength() * activeLine->getMaxLength()
-				+ (*other)->getMaxLength() * (*other)->getMaxLength() / 4;
-			distances2.push_back(distanceSum2);
-		}
-	}
-
-	for (int i = 0; i < (int)points.size() - 1; i++)
-	{
-compareToOtherPolylines:
-		// Compare to all the other polylines.
-		for (int j = 0; j < others.size(); j++)
-		{
-			if (!otherBounds[j].Contains(points[i]))
-				continue;
-			auto otherLine = others[j];
-			const std::vector<VE::Point>& otherPoints = otherLine->getPoints();
-
-			int indexOther = otherLine->PointIndex(points[i], distances2[j]);
-
-			// Is there a close point on the otherLine?
-			// Then check if there is an intersection or overlap.
-			if (indexOther >= 0) {
-				// Found point maybe the same. => OVERLAP
-				if (otherPoints[indexOther] == points[i]) {
-					// Chop the first segments, if we aren't at the first point anymore,
-					// and store it in the new polyline list.
-					if (i > start) {
-						//std::cout << "Chop at " << j << "/" << points.size() << "\n";
-						std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
-						result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-					}
-
-					int end = i;
-					// Trace to the "end" of the overlap by shifting i (~ the read head).
-					TraceOverlap(points, otherLine->getPoints(), end, indexOther);
-					// Single point, but we had just progressed and chopped something off.
-					// OR
-					// There was a longer trace.
-					// => These conditions are there to prevent getting stuck at the end of an overlap.
-					if ((end == i && end > start) ||
-						end > i)
-					{
-						start = end;
-						i = end - 1;
-						break;
-					}
-				}
-				// Found point might intersect. => INTERSECTION
-				else {
-					float t = -1,
-						u = -1;
-
-					if (indexOther > 0) {
-						try {
-							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther - 1], t, u);
-						}
-						catch (const CollinearityException & e) {
-							// Collinearity found, lines will not "intersect".
-							std::cout << "Collinearity";
-							t = -1;
-						}
-					}
-
-					bool intersectionFound = t >= 0 && t <= 1 && u >= 0 && u <= 1;
-					if (!intersectionFound && indexOther < otherPoints.size() - 1) {
-						try {
-							Intersection(points[i], points[i + 1], otherPoints[indexOther], otherPoints[indexOther + 1], t, u);
-						}
-						catch (const CollinearityException & e) {
-							// Collinearity found, lines will not "intersect".
-							std::cout << "Collinearity";
-							t = -1;
-						}
-					}
-
-					// t must no be 0 or 1, because in that case, there is already a point available.
-					intersectionFound = t > 0 && t < 1 && u >= 0 && u <= 1;
-
-					if (intersectionFound) {
-						VE::Point direction = points[i + 1] - points[i];
-						VE::Point intersect = points[i] + direction * t;
-
-						if (points[i] == intersect) {
-							// There may be not enough resolution floats if t is very small.
-							// There is not need to trace, because if a point was on the other 
-							// line, a trace would have been started already.
-						}
-						else {
-							std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
-							choppedPoints.push_back(intersect);
-							result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
-
-							points[i] = intersect;
-							start = i;
-							// restart comparison
-							goto compareToOtherPolylines;
-						}
-					}
-				}
+		else {
+			if (t1 < splitAt) {
+				splitAt = t1;
+				splitPt = swap ? b2 : b1;
 			}
 		}
 	}
-	if (start < (int)points.size() - 1) {
+	else {
+		std::cout << "non zero\n";
+		// Since the lines are not parallel, if we are already skipping,
+		// then there is no need to check for splitting.
+		if (skipToAt > 0.f) return;
+
+		float rxs = VE::Cross(aDir, bDir);
+		const VE::Point ab = b1 - a1;
+		float t = VE::Cross(ab, bDir) / rxs;
+		if (t < 0 || t >= 1) return;
+		float u = VE::Cross(ab, aDir) / rxs;
+		if (u < 0 || u > 1) return;
+		if (t == 0) {
+			startSplit = true;
+		}
+		else {
+			float MD_u = MERGE_DISTANCE * bMag2;
+
+			if (t < splitAt) {
+				splitAt = t;
+				if (u <= MD_u)
+					splitPt = b1;
+				else if (u >= 1 - MD_u)
+					splitPt = b2;
+				else
+					splitPt = b1 + u * bDir;
+			}
+		}
+	}
+}
+
+inline void Intersection(const VE::Point& a, const VE::Point& aDir, const VE::Point& b, const VE::Point& bDir, float& t, float& u) {
+	float rxs = VE::Cross(aDir, bDir);
+	const VE::Point ab = b - a;
+
+	// Lines may not be collinear, otherwise it is a 0 division.
+	t = VE::Cross(ab, aDir) / rxs;
+	u = VE::Cross(ab, bDir) / rxs;
+}
+
+// Params
+// points		this line gets destroyed
+// others		all the other polylines which bounds intersect (!)
+// result		whatever segments remain from the path
+/*
+	There are several cases, which can occur simultaneously.
+
+	1a	Point Point Intersection
+	1b	Point Point Intersection with parallel, shorter line 
+	1c	Point Point Intersection with parallel, longer line 
+	2a	Point Line Intersection
+	2b	Point Line Intersection with a parallel, shorter line (it ends earlier)
+	2b	Point Line Intersection with a parallel, longer line (it ends later)
+	3a	Line Point Intersection
+	3b	Line Point Intersection with a parallel line (shorter or longer)
+	3c	Line Line Intersection
+*/
+void VectorGraphic::GetNoneOverlappingLines(std::vector<VE::Point>& points, std::vector<VE::PolylinePtr>& result,
+	const std::vector<VE::PolylinePtr> others, const std::vector<VE::Bounds> paddedBounds, const std::vector<float> distances2)
+{
+	result.clear();
+	int start = 0;
+	// Only iterate up to the penultimate point.
+	for (int i = 0; i < (int)points.size() - 1; i++)
+	{
+		VE::Point& pt = points[i];
+		VE::Point& ptNext = points[i + 1];
+		const VE::Point ptDir = ptNext - pt;
+		const float dirPtMag2 = VE::Magnitude(ptDir);
+
+		bool startSplit = false;
+		float splitAt = 1.f;
+		VE::Point splitPt = ptNext;
+		float skipToAt = 0.f;
+		VE::Point skipToPt = ptNext;
+
+		// Compare to all the other polylines.
+		for (int j = 0; j < others.size(); j++)
+		{
+			if (!paddedBounds[j].Contains(pt))
+				continue;
+
+			VE::PolylinePtr otherLine = others[j];
+			int indexOther = otherLine->PointIndex(pt, distances2[j]);
+			if (indexOther < 0)
+				continue;
+
+			const std::vector<VE::Point>& otherPoints = otherLine->getPoints();
+
+			// 1. Point Point Intersection
+			if (points[i] == otherPoints[indexOther]) {
+				startSplit = true;
+				if (indexOther < otherPoints.size() - 1)
+					SkipSplit_PointIntersect(pt, ptNext, otherPoints[indexOther + 1], skipToAt, skipToPt);
+				if (indexOther > 0)
+					SkipSplit_PointIntersect(pt, ptNext, otherPoints[indexOther - 1], skipToAt, skipToPt);
+			}
+			// 2. Other Intersection
+			else {
+				if (indexOther < otherPoints.size() - 1)
+					SkipSplit_ClosePoints(pt, ptNext, otherPoints[indexOther], otherPoints[indexOther + 1],
+						startSplit, splitAt, splitPt, skipToAt, skipToPt,
+						MERGE_DISTANCE, MERGE_DISTANCE2);
+				if (indexOther > 0)
+					SkipSplit_ClosePoints(pt, ptNext, otherPoints[indexOther], otherPoints[indexOther - 1],
+						startSplit, splitAt, splitPt, skipToAt, skipToPt,
+						MERGE_DISTANCE, MERGE_DISTANCE2);
+			}
+
+			if (skipToAt >= 1.f)
+				break;
+		}
+		std::cout << "end > " << pt << "-" << ptNext << "       " <<  splitAt << "   " << splitPt << "   \n";
+		// After looping over the other lines and examining close
+		// segments, check out the results.
+		if (startSplit && start < i) {
+			std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
+			result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+		}
+
+		if (skipToAt >= 1.f) { // Just go to the next point.
+			start = i + 1;
+			continue;
+		}
+		if (skipToAt > 0.f) { // Replace with next, then resume with the same point.
+			points[i] = skipToPt;
+			start = i;
+			i--;
+			continue;
+		}
+
+		if (splitAt < 1.f) {
+			if (startSplit) {
+				// Add short segment, replace, then resume with the replaced (same) point.
+				std::vector<VE::Point> choppedPoints(points.begin() + i, points.begin() + i + 2);
+				choppedPoints.back() = splitPt;
+				result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+				points[i] = splitPt;
+				start = i;
+				i--;
+			}
+			else {
+				// Chop off with additional point, replace, then resume with the replaced (same) point.
+				std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 2);
+				choppedPoints.back() = splitPt;
+				result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+				points[i] = splitPt;
+				start = i;
+				i--;
+			}
+		}
+
+	}
+	if (start < points.size() - 1) {
 		std::vector<VE::Point> choppedPoints(points.begin() + start, points.end());
 		result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
 	}
-	if (start != 0)
-		std::cout << ".";
 }
 
 // Remove floats (Curves Segments which overlap)
@@ -701,25 +760,43 @@ void VectorGraphic::RemoveOverlaps()
 	for (int i = 0; i < numberOfPolylines; i++)
 	{
 		// Take first out.
-		VE::PolylinePtr polyline = Polylines.front();
+		VE::PolylinePtr& polyline = Polylines.front();
+		std::vector<VE::Point> points = polyline->getPoints();
 		Polylines.erase(Polylines.begin());
 
-		decltype(Polylines) newPolylines;
-		GetNoneOverlappingLines(polyline, Polylines.begin(), Polylines.end(), newPolylines);
+		std::vector<VE::PolylinePtr> newPolylines;
+		std::vector<VE::PolylinePtr> others;
+		std::vector<VE::Bounds> paddedBounds;
+		std::vector<float> distances2;
+
+		LinesWithPaddedBounds(polyline, Polylines,
+			others, paddedBounds, distances2);
+		GetNoneOverlappingLines(points, newPolylines,
+			others, paddedBounds, distances2);
 		
+		// TODO remove next line
+		Polylines.erase(Polylines.begin());
+
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
+		break;
 	}
 	std::cout << "\n";
-	for (auto& pl : Polylines) {
+	for (int i = Polylines.size() - 1; i >= 0; i--)
+	{
+		const PolylinePtr pl = Polylines[i];
+
 		if (pl->Length() < 2) {
-			std::cout << "FATAL\n";
+			std::cout << "FATAL " << i << "\n";
+			Polylines.erase(Polylines.begin() + i);
 			//throw std::exception("WTF");
 		}
 	}
 			
 	return;
 }
+
+
 
 void VectorGraphic::MergeConnected(const float& pMinMergeAngle)
 {

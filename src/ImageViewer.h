@@ -121,6 +121,9 @@ private:
 	bool lmbHold = false;
 	InteractionMode mode = InteractionMode::Examine;
 
+	void WorkingDirSave();
+	void WorkingDirRead();
+
 protected:
 	void mousePressEvent(QMouseEvent * event);
 	void mouseMoveEvent(QMouseEvent * event);
