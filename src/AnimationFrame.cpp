@@ -46,11 +46,31 @@ bool Animation::Frame::Load(std::string line_path)
 bool Animation::Frame::Load(std::string image_path, std::string line_path)
 {
 	if (VerifyPath(image_path)) {
-		image = cv::imread(image_path);
+		image = cv::imread(image_path, cv::IMREAD_UNCHANGED);
 		if (image.empty()) {
 			return false;
 		}
-		cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+		if (image.channels() == 4) {
+			std::vector<cv::Mat> imageChannels;
+			cv::split(image, imageChannels);
+
+			//invert
+			/*auto ptr = imageChannels[3].ptr();
+			for (uint i = 0; i < imageChannels[0].cols * imageChannels[0].rows; i++)
+			{
+				ptr[i] = 255 - ptr[i];
+			} */
+
+			imageChannels[1] = imageChannels[3];
+			imageChannels[2] = imageChannels[3];
+			imageChannels.erase(imageChannels.begin());
+
+			cv::merge(imageChannels, image);
+			
+		}
+		else {
+			cv::cvtColor(image, image, cv::COLOR_BGR2RGB);
+		}
 	}
 	else {
 		return false;
@@ -69,10 +89,20 @@ bool Animation::Frame::Load(std::string image_path, std::string line_path)
 	return true;
 }
 
-bool Animation::Frame::Reload()
+bool Animation::Frame::ReloadOrig()
 {
 	if (VerifyPath(linePath))
 		return Load(linePath);
+	return false;
+}
+
+bool Animation::Frame::ReloadEdit()
+{
+	std::string editLinePath = linePath;
+	replace(editLinePath, ".svg", ".l.svg");
+	if (VerifyPath(editLinePath))
+		return Load(editLinePath);
+	return false;
 }
 
 cv::Mat& Animation::Frame::getImage()

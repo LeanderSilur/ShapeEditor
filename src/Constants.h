@@ -19,9 +19,9 @@ namespace VE {
 
 	// Polyline drawing options
 	const int POLYLINE_LINETYPE = cv::LINE_AA;
-	const int POLYLINE_LINETHICKNESS = 1;
+	const int POLYLINE_LINETHICKNESS = 1.5;
 	const int POLYLINE_LINETHICKNESS_HIGHLIGHT = 3;
-	const cv::Scalar POLYLINE_COLOR_STD(160, 24, 160);
+	const cv::Scalar POLYLINE_COLOR_STD(200, 0, 200);
 	const cv::Scalar POLYLINE_COLOR_LOOP(0, 200, 0);
 	const cv::Scalar POLYLINE_COLOR_INVALID(255, 0, 0);
 	const cv::Scalar POLYLINE_COLOR_ENDS(40, 40, 40);
@@ -31,6 +31,7 @@ namespace VE {
 	const int BOUNDS_LINETYPE = cv::LINE_4;
 	const int BOUNDS_LINETHICKNESS = 1;
 	const cv::Scalar BOUNDS_COLOR(255, 0, 255);
+
 
 	// Highlighting
 	const cv::Scalar HIGHLIGHT_COLOR(255, 0, 0);
@@ -98,6 +99,26 @@ namespace VE {
 
 		result = u + t * uv;
 		return Magnitude2(result - pt);
+	}
+
+	static inline float DistancePointLineClip2(const Point& u, const Point& v, const Point& pt, Point& result, float& t)
+	{
+		const Point uv = v - u;
+		const float mag2 = Magnitude2(uv);
+
+		t = 0.f;
+		if (mag2 != 0.0f)
+			t = (pt - u).dot(uv) / mag2;
+		if (t < 0) t = 0;
+		if (t > 1) t = 1;
+		result = u + t * uv;
+		return Magnitude2(result - pt);
+	}
+
+	static inline float DistancePointLineClip2(const Point& u, const Point& v, const Point& pt, Point& result)
+	{
+		float t;
+		VE::DistancePointLineClip2(u, v, pt, result, t);
 	}
 
 	// Snaps the result point to either u or v.

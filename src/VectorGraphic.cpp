@@ -125,8 +125,8 @@ void VectorGraphic::DeleteConnections(VE::PolylinePtr ptr)
 
 
 
-const float VectorGraphic::MERGE_DISTANCE = 1e-6;
-const float VectorGraphic::MERGE_DISTANCE2 = 1e-3;
+const float VectorGraphic::MERGE_DISTANCE = 1e-4;
+const float VectorGraphic::MERGE_DISTANCE2 = 1e-8;
 
 
 const char* quotationMark = "\"'";
@@ -227,7 +227,7 @@ void parseIntChain(std::vector<int>& chain, std::string& line) {
 	}
 }
 
-void VectorGraphic::AddPolyline(std::vector<VE::Point>& pts)
+void VectorGraphic::AddPolyline(const std::vector<VE::Point>& pts)
 {
 	VE::PolylinePtr ptr = std::make_shared<VE::Polyline>(pts);
 	Polylines.push_back(ptr);
@@ -464,9 +464,9 @@ void VectorGraphic::SnapEndpoints(const float& pSnappingDistance2)
 	std::cout << "Snapping ";
 	for (size_t i = 0; i < Polylines.size(); i++)
 	{
-		auto& polyline = Polylines[i];
+		VE::PolylinePtr polyline = Polylines[i];
 		// Construct a new Vector with references to all the other polylines
-		decltype(Polylines) otherLines(Polylines);
+		std::vector<VE::PolylinePtr> otherLines(Polylines);
 		otherLines.erase(otherLines.begin() + i);
 
 		VE::Point start = polyline->Front();
@@ -507,13 +507,14 @@ void LinesWithPaddedBounds(const VE::PolylinePtr& activeLine,
 			continue;
 		othersSelected.push_back(*other);
 		Bounds bounds = (*other)->getBounds();
-		float padding = activeLine->getMaxLength() * 0.5001;
-		bounds.Pad(padding);
+		bounds.Pad(activeLine->getMaxLength());
 		paddedBounds.push_back(bounds);
 
-		float distanceSum2 = activeLine->getMaxLength() * activeLine->getMaxLength() / 4
-			+ (*other)->getMaxLength() * (*other)->getMaxLength() / 4
-			+ 5 * FLT_EPSILON;
+		float maxLen = activeLine->getMaxLength();
+		float maxLenOther = (*other)->getMaxLength();
+		float distanceSum2 = maxLen * maxLen // Can't half the initial value, because the last segment can be split at it's end.
+			+ maxLenOther * maxLenOther / 4
+			+ 3 * FLT_EPSILON;
 		distances2.push_back(distanceSum2);
 	}
 }
@@ -529,13 +530,12 @@ inline void SkipSplit_PointIntersect(const VE::Point& a1, const VE::Point& a2, c
 {
 	const VE::Point& aDir = a2 - a1;
 	const VE::Point& bDir = b2 - a1;
-	const float& aMag2 = VE::Magnitude2(aDir);
-	const float& bMag2 = VE::Magnitude2(bDir);
+	const float& aMag = VE::Magnitude(aDir);
+	const float& bMag = VE::Magnitude(bDir);
 
-	const float angle = VE::Dot(aDir, bDir) / (aMag2 * bMag2);
+	const float angle = VE::Dot(aDir, bDir) / (aMag * bMag);
 	if (AngleIsZero(angle)) {
-		std::cout << "anglezero1\n";
-		const float t = bMag2 / aMag2;
+		const float t = bMag / aMag;
 		if (t > skipToAt) {
 			skipToAt = t;
 			skipToPt = b2;
@@ -552,12 +552,12 @@ inline void SkipSplit_ClosePoints(const VE::Point& a1, const VE::Point& a2, cons
 	const float& aMag2 = VE::Magnitude2(aDir);
 	const float& bMag2 = VE::Magnitude2(bDir);
 
-	std::cout << "inside\n";
+	float MD_t = MERGE_DISTANCE / std::sqrt(aMag2);
+	float MD_u = MERGE_DISTANCE / std::sqrt(bMag2);
 
 	const float angle = VE::Dot(aDir, bDir) / (std::sqrt(aMag2) * std::sqrt(bMag2));
 	// Check if the lines are parallel.
 	if (AngleIsZero(std::abs(angle))) {
-		std::cout << "anglezero2\n";
 		// Check Distance from "other" point to current line segment.
 		float t1 = (b1 - a1).dot(aDir) / aMag2;
 		const VE::Point closest_b1 = a1 + t1 * aDir;
@@ -577,7 +577,7 @@ inline void SkipSplit_ClosePoints(const VE::Point& a1, const VE::Point& a2, cons
 		}
 
 		if (t2 < 0 || t1 >= 1) return;
-		if (t1 <= 0) {
+		if (t1 <= MD_t) {
 			startSplit = true;
 			if (t2 > skipToAt) {
 				skipToAt = t2;
@@ -592,31 +592,39 @@ inline void SkipSplit_ClosePoints(const VE::Point& a1, const VE::Point& a2, cons
 		}
 	}
 	else {
-		std::cout << "non zero\n";
 		// Since the lines are not parallel, if we are already skipping,
 		// then there is no need to check for splitting.
 		if (skipToAt > 0.f) return;
 
+
 		float rxs = VE::Cross(aDir, bDir);
 		const VE::Point ab = b1 - a1;
 		float t = VE::Cross(ab, bDir) / rxs;
-		if (t < 0 || t >= 1) return;
+		if (t < MD_t || t + MD_t >= 1) return;
 		float u = VE::Cross(ab, aDir) / rxs;
 		if (u < 0 || u > 1) return;
 		if (t == 0) {
 			startSplit = true;
 		}
 		else {
-			float MD_u = MERGE_DISTANCE * bMag2;
 
 			if (t < splitAt) {
-				splitAt = t;
-				if (u <= MD_u)
+				if (u <= MD_u) {
+					splitAt = t;
 					splitPt = b1;
-				else if (u >= 1 - MD_u)
+				}
+				else if (u >= 1 - MD_u) {
+					splitAt = t;
 					splitPt = b2;
-				else
-					splitPt = b1 + u * bDir;
+				}
+				else {
+					VE::Point possibleSplitPt = b1 + u * bDir;
+					// Prevent rounding errors, even if t != 0 | 1, b1 + u*bDir may just be a1 or a2.
+					if (possibleSplitPt != a1 && possibleSplitPt != a2) {
+						splitAt = t;
+						splitPt = possibleSplitPt;
+					}
+				}
 			}
 		}
 	}
@@ -699,18 +707,17 @@ void VectorGraphic::GetNoneOverlappingLines(std::vector<VE::Point>& points, std:
 						startSplit, splitAt, splitPt, skipToAt, skipToPt,
 						MERGE_DISTANCE, MERGE_DISTANCE2);
 			}
-
 			if (skipToAt >= 1.f)
 				break;
 		}
-		std::cout << "end > " << pt << "-" << ptNext << "       " <<  splitAt << "   " << splitPt << "   \n";
+
 		// After looping over the other lines and examining close
 		// segments, check out the results.
 		if (startSplit && start < i) {
 			std::vector<VE::Point> choppedPoints(points.begin() + start, points.begin() + i + 1);
 			result.push_back(std::make_shared<VE::Polyline>(choppedPoints));
+			start = i;
 		}
-
 		if (skipToAt >= 1.f) { // Just go to the next point.
 			start = i + 1;
 			continue;
@@ -760,7 +767,7 @@ void VectorGraphic::RemoveOverlaps()
 	for (int i = 0; i < numberOfPolylines; i++)
 	{
 		// Take first out.
-		VE::PolylinePtr& polyline = Polylines.front();
+		VE::PolylinePtr polyline = Polylines.front();
 		std::vector<VE::Point> points = polyline->getPoints();
 		Polylines.erase(Polylines.begin());
 
@@ -768,18 +775,14 @@ void VectorGraphic::RemoveOverlaps()
 		std::vector<VE::PolylinePtr> others;
 		std::vector<VE::Bounds> paddedBounds;
 		std::vector<float> distances2;
-
 		LinesWithPaddedBounds(polyline, Polylines,
 			others, paddedBounds, distances2);
 		GetNoneOverlappingLines(points, newPolylines,
 			others, paddedBounds, distances2);
 		
-		// TODO remove next line
-		Polylines.erase(Polylines.begin());
-
 		Polylines.insert(Polylines.end(), newPolylines.begin(), newPolylines.end());
 		std::cout << "|";
-		break;
+		
 	}
 	std::cout << "\n";
 	for (int i = Polylines.size() - 1; i >= 0; i--)
@@ -953,6 +956,32 @@ void VectorGraphic::Split(VE::PolylinePtr pl, const int& idx)
 {
 	std::vector<int> indices{ idx };
 	Split(pl, indices);
+}
+
+void VectorGraphic::Split(VE::PolylinePtr pl, const int& idx, const float& t)
+{
+	const std::vector<VE::Point>& orig = pl->getPoints();
+	assert(idx >= 0 || idx < orig.size());
+	assert(std::abs(t) > 0 && std::abs(t) < 1);
+
+	Polylines.erase(std::find(Polylines.begin(), Polylines.end(), pl));
+	DeleteConnections(pl);
+
+	float t1 = t;
+	int idx1 = idx;
+	if (t < 0) {
+		t1 = 1 + t;
+		idx1 = idx - 1;
+		
+	}
+
+	VE::Point uv = orig[idx1 + 1] - orig[idx1];
+	std::vector<VE::Point> splitPoints1(orig.begin(), orig.begin() + idx1 + 2);
+	std::vector<VE::Point> splitPoints2(orig.begin() + idx1, orig.end());
+	splitPoints1.back() = orig[idx1] + uv * t1;
+	splitPoints2.front() = splitPoints1.back();
+	Polylines.push_back(std::make_shared<VE::Polyline>(splitPoints1));
+	Polylines.push_back(std::make_shared<VE::Polyline>(splitPoints2));
 }
 
 void VectorGraphic::Split(VE::PolylinePtr pl, const std::vector<int> indices)
@@ -1276,45 +1305,63 @@ void VectorGraphic::MakeColorsUnique()
 	}
 }
 
-// Gets the closest Point and Polyline to a given Point "target".
-void VectorGraphic::ClosestPolylinePoint(float& distance2, const VE::Point& target,
-	int& ptIdx, VE::Point& closest, VE::PolylinePtr& element,
-	const VE::Bounds* bounds, const float snapEndpoints2)
+
+VectorGraphic::CPParams::CPParams(const VE::Point& target, M method)
+	: target(target), method(method)
 {
-	ptIdx = -1;
-	element = nullptr;
+}
+
+// Try snapping endpoints if requested.
+void TrySnap(VectorGraphic::CPParams& params) {
+	float startDist2 = VE::Distance2(params.closestPolyline->Front(), params.closestPt);
+	float endDist2 = VE::Distance2(params.closestPolyline->Back(), params.closestPt);
+	if (startDist2 < params.snapEndpoints2 || endDist2 < params.snapEndpoints2) {
+		if (startDist2 < endDist2) {
+			params.ptIdx = 0;
+			params.closestPt = params.closestPolyline->Front();
+		}
+		else {
+			params.ptIdx = params.closestPolyline->Length() - 1;
+			params.closestPt = params.closestPolyline->Back();
+		}
+	}
+}
+
+
+void VectorGraphic::ClosestPolyline(CPParams& params)
+{
+	params.ptIdx = -1;
+	params.closestPolyline = nullptr;
 
 	// Closest Line and Point Indices are kept for debugging.
 	// Perhaps this function should simply return indices instead of references.
-	for (auto&pl:Polylines) {
+	for (auto& pl : Polylines) {
 		// Check for visibility first.
-		if (bounds != nullptr &&
-			!bounds->Overlap(pl->getBounds()))
+		if (params.bounds != nullptr &&
+			!params.bounds->Overlap(pl->getBounds()))
 			continue;
-
-		int index = pl->ClosestLinePt2(target, distance2, closest);
 		
-		if (index >= 0) {
-			ptIdx = index;
-			element = pl;
-		}
-	}
+		int index;
+		if (params.method == CPParams::M::Point)
+			index = pl->ClosestPt2(params.target, params.distance2);
+		else
+			index = pl->ClosestLinePt2(params.target, params.distance2, params.closestPt, params.t);
 
-	// Try snapping endpoints first if requested.
-	if (snapEndpoints2 > 0 && element != nullptr) {
-		float startDist2 = VE::Distance2(element->Front(), target);
-		float endDist2 = VE::Distance2(element->Back(), target);
-		if (startDist2 < snapEndpoints2 || endDist2 < snapEndpoints2) {
-			if (startDist2 < endDist2) {
-				ptIdx = 0;
-				closest = element->Front();
-			}
-			else {
-				ptIdx = element->Length() - 1;
-				closest = element->Back();
-			}
+		if (index >= 0) {
+			params.ptIdx = index;
+			params.closestPolyline = pl;
 		}
 	}
+	if (params.ptIdx == -1)
+		return;
+
+	// With splitting, we don't need to make the closest point an element on the line.
+	if (params.method != CPParams::M::Split)
+		params.closestPt = params.closestPolyline->getPoints()[params.ptIdx];
+
+	if (params.snapEndpoints2 > 0)
+		TrySnap(params);
+
 }
 
 bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float& maxDist, bool&downwards)
@@ -1368,10 +1415,6 @@ bool ClosestPolylineLeft1(const VE::Point& target, VE::PolylinePtr& line, float&
 	}
 	return maxDist < origMaxDist;
 }
-
-
-
-
 
 bool VectorGraphic::ClosestConnectionLeft(const VE::Point& target, std::vector<VE::PolylinePtr>& lines, VE::Connection& result)
 {

@@ -35,7 +35,7 @@ namespace VE {
 			UpdateSimplifiedPoints();
 		};
 
-		void setPoints(std::vector<Point>& inputPoints);
+		void setPoints(const std::vector<Point>& inputPoints);
 		const Point& getPoint(const int& i) { return points[i]; };
 		const std::vector<Point>& getPoints();
 
@@ -46,7 +46,7 @@ namespace VE {
 		inline float getMaxLength() { return maxLength; };
 
 		Polyline();
-		Polyline(std::vector<Point>& points);
+		Polyline(const std::vector<Point>& points);
 		~Polyline();
 
 		// First point in Polyline.
@@ -73,7 +73,7 @@ namespace VE {
 		bool AnyPointInRect(const VE::Bounds & other);
 		float Distance2(Point& pt);
 		int ClosestPt2(const Point& target, float& distance2);
-		int ClosestLinePt2(const Point& target, float& distance2, Point& closest);
+		int ClosestLinePt2(const Point& target, float& distance2, VE::Point& ptOnLine, float& at);
 
 		int PointIndex(const Point& pt, const float& maxDist2 = 0);
 		bool LongEnough() { return points.size() >= 2; };

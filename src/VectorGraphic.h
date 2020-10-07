@@ -26,7 +26,7 @@ public:
 	std::vector<VE::PolylinePtr> Polylines;
 	std::vector<VE::PolyshapePtr> Polyshapes;
 
-	void AddPolyline(std::vector<VE::Point>& pts);
+	void AddPolyline(const std::vector<VE::Point>& pts);
 	void Load(std::string path);
 	void Save(std::string path, std::string image_path, cv::Size2i shape);
 	void SavePolyshapes(std::string path, std::string image_path, cv::Size2i shape);
@@ -41,6 +41,7 @@ public: void RemoveOverlaps();
 
 	// Lines
 	void Split(VE::PolylinePtr pl, const int& idx);
+	void Split(VE::PolylinePtr pl, const int& idx, const float& t);
 	void Split(VE::PolylinePtr pl, const std::vector<int> indices);
 	//void Connect(VE::Connection& a, VE::Connection& b);
 	void Delete(VE::PolylinePtr line);
@@ -65,13 +66,32 @@ public:
 	void MakeColorsUnique();
 
 
+	struct CPParams
+	{
+		enum M {
+			Point,
+			Segment,
+			Split
+		};
+		CPParams::M method = CPParams::M::Point;
 
+		CPParams(const VE::Point& target, CPParams::M method = CPParams::M::Point);
+		float distance2;
+		int ptIdx;
+		float t;
+		VE::Point closestPt;
+		VE::PolylinePtr closestPolyline;
+
+		const VE::Point& target;
+		float snapEndpoints2 = 0.f;
+		const VE::Bounds* bounds = nullptr;
+
+	};
+	
 	// bloated complicated method, used for the imageviewer
 	// returns the points index if a point closer than distance2 was found
 	// If there was no point, the index -1 is returned.
-	void ClosestPolylinePoint(float& distance2, const VE::Point & target,
-		int& ptIdx, VE::Point & closest, VE::PolylinePtr& element,
-		const VE::Bounds* bounds = nullptr, const float snapEndpoints2 = 0);
+	void ClosestPolyline(CPParams& params);
 
 private: 
 	bool ClosestConnectionLeft(const VE::Point& target, std::vector<VE::PolylinePtr>& lines, VE::Connection& result);

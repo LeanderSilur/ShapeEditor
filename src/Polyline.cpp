@@ -33,7 +33,7 @@ namespace VE {
 		return tree.nearest(pt, float(maxDist2));
 	}
 
-	void Polyline::setPoints(std::vector<Point>& inputPoints)
+	void Polyline::setPoints(const std::vector<Point>& inputPoints)
 	{
 		this->points = inputPoints;
 		Cleanup();
@@ -79,7 +79,7 @@ namespace VE {
 		std::exception("Default Constructor shouldnt be used.");
 	}
 
-	Polyline::Polyline(std::vector<Point>& points)
+	Polyline::Polyline(const std::vector<Point>& points)
 	{
 		setPoints(points);
 	}
@@ -207,50 +207,50 @@ namespace VE {
 	}
 
 	// Returns the point closest to the closest point on the line.
-	int Polyline::ClosestLinePt2(const Point& target, float& distance2, Point& closest)
+	int Polyline::ClosestLinePt2(const Point& target, float& distance2, VE::Point& ptOnLine, float& at)
 	{
 		float maxDist2 = distance2 + maxLength * maxLength / 4 + EPSILON;
 
-		int index = tree.nearest(target, maxDist2);
-		if (index < 0) return -1;
+		int idx = tree.nearest(target, maxDist2);
+		if (idx < 0) return -1;
 
-		Point pointOnLine;
-		float distancePrev = FMAX;
-		float distanceNext = FMAX;
-		if (index > 0) {
-			distancePrev = VE::DistancePointLine2(points[index], points[index - 1], target, pointOnLine);
-		}
-		if (index < (int)points.size() - 1) {
-			distanceNext = VE::DistancePointLine2(points[index], points[index + 1], target, pointOnLine);
-		}
+		int closestIdx = -1;
 
-		if (std::min(distancePrev, distanceNext) > distance2)
-			return -1;
+		if (idx < points.size() - 1) {
+			if (points[idx] == points[idx + 1])
+				throw std::exception("Points are the same.");
 
-		// Otherwise one of the adjacent points or the closest point is closer than distance2.
-		Point other;
-		int otherIdx;
-		if (distancePrev < distanceNext) {
-			distance2 = distancePrev;
-			otherIdx = index - 1;
-			other = points[otherIdx];
+			const Point uv = points[idx + 1] - points[idx];
+			const float mag2 = Magnitude2(uv);
+			float t = (target - points[idx]).dot(uv) / mag2;
+			t = t < 0 ? 0.f : t > 1 ? 1 : t;
+			Point ptOnLineNext = points[idx] + t * uv;
+			float d2 = VE::Distance2(ptOnLineNext, target);
+			if (d2 < distance2) {
+				closestIdx = idx;
+				distance2 = d2;
+				at = t;
+				ptOnLine = ptOnLineNext;
+			}
 		}
-		else {
-			distance2 = distanceNext;
-			otherIdx = index + 1;
-			other = points[otherIdx];
+		if (idx > 0) {
+			if (points[idx] == points[idx - 1])
+				throw std::exception("Points are the same.");
+
+			const Point uv = points[idx - 1] - points[idx];
+			const float mag2 = Magnitude2(uv);
+			float t = (target - points[idx]).dot(uv) / mag2;
+			t = t < 0 ? 0.f : t > 1 ? 1 : t;
+			Point ptOnLineNext = points[idx] + t * uv;
+			float d2 = VE::Distance2(ptOnLineNext, target);
+			if (d2 < distance2) {
+				closestIdx = idx;
+				distance2 = d2;
+				at = -t;
+				ptOnLine = ptOnLineNext;
+			}
 		}
-		Point d1 = target - points[index];
-		Point d2 = target - other;
-		// Pythagorean comparison of d1 & d2.
-		if (d1.x * d1.x + d1.y * d1.y < d2.x * d2.x + d2.y * d2.y) {
-			closest = points[index];
-		}
-		else {
-			index = otherIdx;
-			closest = other;
-		}
-		return index;
+		return closestIdx;
 	}
 
 	// Get the Index of the point closest to (param) pt

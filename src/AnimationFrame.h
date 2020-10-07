@@ -21,7 +21,8 @@ namespace Animation {
 		// a matching .png from: "myfileName0000.png.svg"
 		bool Load(std::string image_path);
 		bool Load(std::string image_path, std::string line_path);
-		bool Reload();
+		bool ReloadOrig();
+		bool ReloadEdit();
 
 		cv::Mat& getImage();
 		VectorGraphic& getVectorGraphic();

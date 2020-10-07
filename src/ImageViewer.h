@@ -44,12 +44,16 @@ private:
 	bool FILE_SAVE_LINES = true;
 	bool FILE_SAVE_SHAPES = false;
 
+	typedef cv::Point3_<uint8_t> Pixel;
+
 	const cv::Scalar POLYLINE_EXAMINE = cv::Scalar(20, 200, 200);
 	const cv::Scalar POLYLINE_SPLIT = cv::Scalar(255, 200, 0);
 	const cv::Scalar POLYLINE_CONNECT1 = cv::Scalar(30, 180, 200);
 	const cv::Scalar POLYLINE_CONNECT2 = cv::Scalar(30, 255, 30);
 	const cv::Scalar POLYLINE_CONNECT_LINE = cv::Scalar(60, 150, 100);
 	const cv::Scalar POLYLINE_DELETE = cv::Scalar(255, 0, 0);
+
+	const Pixel BACKGROUND_COLOR = Pixel(200, 200, 200);
 
 	std::string WORKING_DIRECTORY = "D:/190725_sequence_colorization/files/malila/rgb";
 
@@ -74,7 +78,6 @@ private:
 		Connect,
 		Delete,
 		ShapeColor,
-		ShapeDelete,
 	};
 	QTabWidget* wMainMenu;
 	QLabel* lInfoText;
@@ -86,15 +89,21 @@ private:
 	QMouseFunc interactionRelease = nullptr;
 
 	// Get the closest line and point. ptIdx will be -1 if no close points are found.
-	void ClosestLinePoint(int& ptIdx, const VE::Point &target, VE::Point& closest, VE::PolylinePtr & pl, bool snapEndpoints);
+	VectorGraphic::CPParams ClosestLinePosition(const VE::Point& target, bool snapEndpoints,
+		const VectorGraphic::CPParams::M& method = VectorGraphic::CPParams::M::Point);
 
 	// Draw Functions
 	void DrawHighlight(const cv::Scalar & color);
-	void DrawHighlightPoints(const cv::Scalar & color);
+	void DrawHighlightPoints(const cv::Scalar & color, bool splitSegments = false);
 	void DrawExamine();
 	void DrawSplit();
 	void DrawConnect();
 	void DrawDelete();
+
+	// Copy Paste
+	std::vector<VE::PolylinePtr> copyPasteBuffer;
+	void Copy(bool replaceBuffer = true);
+	void Paste();
 
 	// Mouse Release Functions
 	void ReleaseSplit(QMouseEvent* event);
@@ -148,8 +157,9 @@ public slots:
 	void RemoveUnusedConnections(bool checked);
 	void CalcShapes(bool checked);
 	void ClearShapes(bool checked);
-	
-	void ReloadFrame(bool checked);
+
+	void ReloadFrameOrig(bool checked);
+	void ReloadFrameEdit(bool checked);
 	void NextFrame(bool checked);
 	void PrevFrame(bool checked);
 
@@ -161,7 +171,6 @@ public slots:
 
 	// Change modes (Shapes)
 	void ctShapeColor(bool checked);
-	void ctShapeDelete(bool checked);
 
 	void FileLoad(bool checked);
 	void FileSave(bool checked);
