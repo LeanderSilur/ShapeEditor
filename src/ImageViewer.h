@@ -13,8 +13,8 @@ class ImageViewer : public QLabel
 	Q_OBJECT
 
 public:
-	const float HIGHLIGHT_DISTANCE = 64;
-	const float ENDPOINT_SNAPPING_DISTANCE = 32;
+	float HIGHLIGHT_DISTANCE = 64;
+	const float ENDPOINT_SNAPPING_DISTANCE = 16;
 
 	ImageViewer(QWidget* parent = nullptr);
 
@@ -171,6 +171,9 @@ public slots:
 
 	// Change modes (Shapes)
 	void ctShapeColor(bool checked);
+
+	// Change Snapping Distance
+	void setHighlightDistance(double value);
 
 	void FileLoad(bool checked);
 	void FileSave(bool checked);

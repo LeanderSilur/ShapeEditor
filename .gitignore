@@ -1,2 +1,4 @@
 *.vcxproj*
-x64
+x64/**
+directory
+testfiles/**

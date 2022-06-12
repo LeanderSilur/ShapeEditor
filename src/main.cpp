@@ -19,14 +19,18 @@ int main(int argc, char* argv[])
 	ShapeEditor se;
 	ImageViewer *iw = new ImageViewer(se.getUi().viewerGrp);
 	iw->ConnectUi(se);
-	if (argc > 1 && std::string(argv[1]) == "debug") {
-		std::cout << "In debugging.";
-		//std::string filename = "D:/download/malila3_09/OUT_A/0076.png";
-		std::string filename = "D:/download/malila_coloring_character/7_05/malila/0051.png";
-		Animation::Frame frame(filename, filename + ".l.svg");
-
-		iw->AddFrame(frame);
-		iw->NextFrame(true);
+	if (argc > 1) {
+		std::string example_path = std::string(argv[1]);
+		std::cout << example_path;
+		if (!std::filesystem::is_regular_file(example_path)) {
+			std::cout << "Example input file not found.\n";
+		}
+		else {
+			std::string filename = example_path;
+			Animation::Frame frame(filename, filename + ".l.svg");
+			iw->AddFrame(frame);
+			iw->NextFrame(true);
+		}
 	}
 
 	se.show();

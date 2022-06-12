@@ -130,7 +130,11 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 	QObject::connect(interactionButtons[InteractionMode::ShapeColor],
 		cl, this, &ImageViewer::ctShapeColor);
 
+	// Just comment it out, wip anyways
+	//QObject::connect(seUi.bi_selectionDist, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
+	//	this, &ImageViewer::setHighlightDistance);
 
+	//auto cl = &QPushButton::clicked;
 	interactionButtons[InteractionMode::Examine]->click();
 }
 
@@ -207,8 +211,9 @@ void ImageViewer::DrawConnect()
 
 	VE::Point pos1 = VE::Point(mousePressPos.x(), mousePressPos.y());
 	VE::Point pos2 = VEMousePosition();
-
-	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, true, VectorGraphic::CPParams::M::Segment);
+	
+	bool snap = CtrlPressed();
+	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, snap, VectorGraphic::CPParams::M::Segment);
 
 	bool pos1_valid = params1.ptIdx >= 0;
 	if (pos1_valid) transform.apply(params1.closestPt);
@@ -216,7 +221,7 @@ void ImageViewer::DrawConnect()
 	if (lmbHold && !pos1_valid) return;
 
 
-	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, true, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, snap, VectorGraphic::CPParams::M::Segment);
 	bool pos2_valid = params2.ptIdx >= 0;
 	if (pos2_valid) transform.apply(params2.closestPt);
 
@@ -293,8 +298,10 @@ void ImageViewer::ReleaseConnect(QMouseEvent* event)
 	VE::Point pos1 = VE::Point(mousePressPos.x(), mousePressPos.y());
 	VE::Point pos2 = VEMousePosition();
 
-	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, true, VectorGraphic::CPParams::M::Segment);
-	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, true, VectorGraphic::CPParams::M::Segment);
+	bool snap = CtrlPressed();
+
+	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, snap, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, snap, VectorGraphic::CPParams::M::Segment);
 	if (params1.ptIdx < 0 || params2.ptIdx < 0)
 		return;
 
@@ -867,6 +874,11 @@ void ImageViewer::ctShapeColor(bool checked)
 	interactionDraw = nullptr;
 	interactionRelease = &ImageViewer::ReleaseShapeColor;
 	ShowMat();
+}
+
+void ImageViewer::setHighlightDistance(double value)
+{
+	this->HIGHLIGHT_DISTANCE = (float)value;
 }
 
 void ImageViewer::FileLoad(bool checked)
