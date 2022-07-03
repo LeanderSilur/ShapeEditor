@@ -132,8 +132,8 @@ const float VectorGraphic::MERGE_DISTANCE2 = 1e-8;
 const char* quotationMark = "\"'";
 const char* whitespace = "\t ";
 const char* alphabetic = "abcdefghijklmnopqrstuvwxyz";
-const char* numeric = "0123456789";
-const char* numericDot = "0123456789.";
+const char* numeric = "-0123456789";
+const char* numericDot = "-0123456789.";
 void parseXML(std::map<std::string, std::string>& attributes, std::string& line) {
 	attributes.clear();
 
@@ -186,6 +186,55 @@ void parseFloatPairs(std::vector<VE::Point>& points, std::string& line) {
 		pt.y = std::atof(line.substr(pair_comma + 1, pair_end - pair_comma - 1).c_str());
 		points.push_back(pt);
 		pair_start = pair_end + 1;
+	}
+}
+
+void parsePath(std::vector<VE::Point>& points, std::string& path) {
+	points.clear();
+
+	size_t cursor = 0;
+	// Verify M, parse first point, store as endpoint
+	cursor = path.find_first_of('M', cursor) + 1;
+	size_t num1Start = path.find_first_of(numericDot, cursor);
+	size_t num1End = path.find_first_not_of(numericDot, num1Start);
+	size_t num2Start = path.find_first_of(numericDot, num1End);
+	size_t num2End = path.find_first_not_of(numericDot, num2Start);
+	VE::Point endpoint;
+	endpoint.x = std::atof(path.substr(num1Start, num1End - num1Start).c_str());
+	endpoint.y = std::atof(path.substr(num2Start, num2End - num2Start).c_str());
+	points.push_back(endpoint);
+	cursor = num2End;
+
+	while (true) {
+		// Verify Q, parse 2, sample points and add, store endpoint
+		cursor = path.find_first_of('Q', cursor) + 1;
+		if (cursor == std::string::npos + 1)
+			return;
+			
+		size_t num1 = path.find_first_of(numericDot, cursor);
+		size_t num2 = path.find_first_of(',', num1) + 1;
+		size_t num3 = path.find_first_of(',', num2) + 1;
+		size_t num4 = path.find_first_of(',', num3) + 1;
+		size_t num4End = path.find_first_of(whitespace, num4);
+		VE::Point pt0 = endpoint;
+		VE::Point pt1(	std::atof(path.substr(num1, num2 - 1 - num1).c_str()),
+						std::atof(path.substr(num2, num3 - 1 - num2).c_str())	);
+		VE::Point pt2(	std::atof(path.substr(num3, num4 - 1 - num3).c_str()),
+						std::atof(path.substr(num4, num4End  - num4).c_str())	);
+
+
+		// samples quadratic bezier
+		for (float i = 0; i < 20; i++)
+		{
+			float t = (i + 1) / 40;
+			float t_inv = 1 - t;
+			float t_inv2 = t_inv * t_inv;
+			VE::Point pt = t_inv2 * pt0
+				+ 2 * t * t_inv * pt1
+				+ t * t * pt;
+			points.push_back(pt);
+		}
+		endpoint = pt2;
 	}
 }
 
@@ -262,6 +311,20 @@ void VectorGraphic::Load(std::string svgPath)
 			}
 			else {
 				std::cout << "Polyline too short.";
+			}
+		}
+		else if (tagName->second == "path") {
+			// fixed sampling rate for quadratic curves
+			std::vector<VE::Point> pts;
+			auto pointIt = attributes.find("d");
+			if (pointIt != attributes.end()) {
+				parsePath(pts, pointIt->second);
+			}
+			if (pts.size() > 1) {
+				AddPolyline(pts);
+			}
+			else {
+				std::cout << "Path went wrong.";
 			}
 		}
 		else if (tagName->second == "shape") {

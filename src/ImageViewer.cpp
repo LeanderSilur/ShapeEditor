@@ -72,44 +72,27 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 	lInfoText = seUi.lInfoText;
 	lFrameText = seUi.lFrameText;
 	
-	QObject::connect(seUi.bFileDirectory,
-		cl, this, &ImageViewer::FileSetDirectory);
-	QObject::connect(seUi.bFileLoad,
-		cl, this, &ImageViewer::FileLoad);
-	QObject::connect(seUi.bFileSaveLines,
-		cl, this, &ImageViewer::FileSave);
-	QObject::connect(seUi.bReloadOrig,
-		cl, this, &ImageViewer::ReloadFrameOrig);
-	QObject::connect(seUi.bReloadEdit,
-		cl, this, &ImageViewer::ReloadFrameEdit);
+	QObject::connect(seUi.bFileDirectory, cl, this, &ImageViewer::FileSetDirectory);
+	QObject::connect(seUi.bFileLoad, cl, this, &ImageViewer::FileLoad);
+	QObject::connect(seUi.bFileSaveLines, cl, this, &ImageViewer::FileSave);
+	QObject::connect(seUi.bReloadOrig, cl, this, &ImageViewer::ReloadFrameOrig);
+	QObject::connect(seUi.bReloadEdit, cl, this, &ImageViewer::ReloadFrameEdit);
 
-	QObject::connect(seUi.bFramePrev,
-		cl, this, &ImageViewer::PrevFrame);
-	QObject::connect(seUi.bFrameNext,
-		cl, this, &ImageViewer::NextFrame);
+	QObject::connect(seUi.bFramePrev, cl, this, &ImageViewer::PrevFrame);
+	QObject::connect(seUi.bFrameNext, cl, this, &ImageViewer::NextFrame);
 
-	QObject::connect(seUi.bsnap,
-		cl, this, &ImageViewer::SnapEndpoints);
-	QObject::connect(seUi.boverlap,
-		cl, this, &ImageViewer::RemoveOverlaps);
-	QObject::connect(seUi.bmergeConnections,
-		cl, this, &ImageViewer::MergeConnected);
-	QObject::connect(seUi.bsimplify,
-		cl, this, &ImageViewer::Simplify);
-	QObject::connect(seUi.bsmooth,
-		cl, this, &ImageViewer::Smooth);
-	QObject::connect(seUi.bbasicCleanup,
-		cl, this, &ImageViewer::BasicCleanup);
+	QObject::connect(seUi.bsnap, cl, this, &ImageViewer::SnapEndpoints);
+	QObject::connect(seUi.boverlap, cl, this, &ImageViewer::RemoveOverlaps);
+	QObject::connect(seUi.bmergeConnections, cl, this, &ImageViewer::MergeConnected);
+	QObject::connect(seUi.bsimplify, cl, this, &ImageViewer::Simplify);
+	QObject::connect(seUi.bsmooth, cl, this, &ImageViewer::Smooth);
+	QObject::connect(seUi.bbasicCleanup, cl, this, &ImageViewer::BasicCleanup);
 
 
-	QObject::connect(seUi.bupdateStat,
-		cl, this, &ImageViewer::ComputeConnectionStatus);
-	QObject::connect(seUi.bremoveUnused,
-		cl, this, &ImageViewer::RemoveUnusedConnections);
-	QObject::connect(seUi.bshapesCalc,
-		cl, this, &ImageViewer::CalcShapes);
-	QObject::connect(seUi.bshapesClear,
-		cl, this, &ImageViewer::ClearShapes);
+	QObject::connect(seUi.bupdateStat, cl, this, &ImageViewer::ComputeConnectionStatus);
+	QObject::connect(seUi.bremoveUnused, cl, this, &ImageViewer::RemoveUnusedConnections);
+	QObject::connect(seUi.bshapesCalc, cl, this, &ImageViewer::CalcShapes);
+	QObject::connect(seUi.bshapesClear, cl, this, &ImageViewer::ClearShapes);
 
 
 
@@ -118,17 +101,20 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 	interactionButtons[InteractionMode::Connect] = seUi.bi_connect;
 	interactionButtons[InteractionMode::Delete] = seUi.bi_delete;
 	interactionButtons[InteractionMode::ShapeColor] = seUi.bi_shapeColor;
+	interactionButtons[InteractionMode::Draw] = seUi.bi_draw;
+	interactionButtons[InteractionMode::Erase] = seUi.bi_erase;
+	interactionButtons[InteractionMode::Grab] = seUi.bi_grab;
+	interactionButtons[InteractionMode::Smooth] = seUi.bi_smooth;
 
-	QObject::connect(interactionButtons[InteractionMode::Examine],
-		cl, this, &ImageViewer::ctExamine);
-	QObject::connect(interactionButtons[InteractionMode::Split],
-		cl, this, &ImageViewer::ctSplit);
-	QObject::connect(interactionButtons[InteractionMode::Connect],
-		cl, this, &ImageViewer::ctConnect);
-	QObject::connect(interactionButtons[InteractionMode::Delete],
-		cl, this, &ImageViewer::ctDelete);
-	QObject::connect(interactionButtons[InteractionMode::ShapeColor],
-		cl, this, &ImageViewer::ctShapeColor);
+	QObject::connect(interactionButtons[InteractionMode::Examine], cl, this, &ImageViewer::ctExamine);
+	QObject::connect(interactionButtons[InteractionMode::Split], cl, this, &ImageViewer::ctSplit);
+	QObject::connect(interactionButtons[InteractionMode::Connect], cl, this, &ImageViewer::ctConnect);
+	QObject::connect(interactionButtons[InteractionMode::Delete], cl, this, &ImageViewer::ctDelete);
+	QObject::connect(interactionButtons[InteractionMode::ShapeColor], cl, this, &ImageViewer::ctShapeColor);
+	QObject::connect(interactionButtons[InteractionMode::Draw], cl, this, &ImageViewer::ctDraw);
+	QObject::connect(interactionButtons[InteractionMode::Erase], cl, this, &ImageViewer::ctErase);
+	QObject::connect(interactionButtons[InteractionMode::Grab], cl, this, &ImageViewer::ctGrab);
+	QObject::connect(interactionButtons[InteractionMode::Smooth], cl, this, &ImageViewer::ctSmooth);
 
 	// Just comment it out, wip anyways
 	//QObject::connect(seUi.bi_selectionDist, static_cast<void (QDoubleSpinBox::*)(double)>(&QDoubleSpinBox::valueChanged),
@@ -140,7 +126,7 @@ void ImageViewer::ConnectUi(ShapeEditor& se)
 
 // Get the closest element and point to the target.
 // Target point is given in viewport transformed space.
-VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target, bool snapEndpoints,const VectorGraphic::CPParams::M& method)
+VectorGraphic::CPParams ImageViewer::ClosestLinePositionView(const VE::Point& target, bool snapEndpoints,const VectorGraphic::CPParams::M& method)
 {
 	VE::Bounds bounds(0, 0, display.cols, display.rows);
 	transform.applyInv(bounds);
@@ -153,7 +139,6 @@ VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target
 		maxDist2 = maxDist * maxDist,
 		maxDistEnd = ENDPOINT_SNAPPING_DISTANCE / transform.scale,
 		maxDistEnd2 = maxDistEnd * maxDistEnd;
-	float dist2 = maxDist2;
 
 	VectorGraphic::CPParams params(tTarget);
 	params.distance2 = maxDist2;
@@ -165,9 +150,24 @@ VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target
 	return params;
 }
 
+VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2)
+{
+	VE::Bounds bounds(0, 0, display.cols, display.rows);
+	VE::Point tTarget = target;
+
+	VectorGraphic::CPParams params(tTarget);
+	params.distance2 = maxDist2;
+	params.bounds = &bounds;
+	params.snapEndpoints2 = 0.0;
+	params.method = method;
+
+	vectorGraphic().ClosestPolyline(params);
+	return params;
+}
+
 void ImageViewer::DrawHighlight(const cv::Scalar & color)
 {
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
 	if (params.ptIdx >= 0) {
 		params.closestPolyline->Draw(display, transform, &color, false);
 	}
@@ -175,7 +175,7 @@ void ImageViewer::DrawHighlight(const cv::Scalar & color)
 
 void ImageViewer::DrawHighlightPoints(const cv::Scalar & color, bool splitSegments)
 {
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false,
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false,
 		splitSegments ? VectorGraphic::CPParams::M::Split : VectorGraphic::CPParams::M::Segment);
 	
 	if (params.closestPolyline != nullptr) {
@@ -213,7 +213,7 @@ void ImageViewer::DrawConnect()
 	VE::Point pos2 = VEMousePosition();
 	
 	bool snap = CtrlPressed();
-	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, snap, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params1 = ClosestLinePositionView(pos1, snap, VectorGraphic::CPParams::M::Segment);
 
 	bool pos1_valid = params1.ptIdx >= 0;
 	if (pos1_valid) transform.apply(params1.closestPt);
@@ -221,7 +221,7 @@ void ImageViewer::DrawConnect()
 	if (lmbHold && !pos1_valid) return;
 
 
-	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, snap, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params2 = ClosestLinePositionView(pos2, snap, VectorGraphic::CPParams::M::Segment);
 	bool pos2_valid = params2.ptIdx >= 0;
 	if (pos2_valid) transform.apply(params2.closestPt);
 
@@ -244,12 +244,66 @@ void ImageViewer::DrawDelete()
 	DrawHighlight(POLYLINE_DELETE);
 }
 
+void ImageViewer::DrawDraw()
+{
+	VectorGraphic::CPParams::M snapType = CtrlPressed() ? VectorGraphic::CPParams::M::Point
+		: VectorGraphic::CPParams::M::Split;
+
+	VE::Point mouse = VEMousePosition();
+	transform.applyInv(mouse);
+
+	if (lmbHold) {
+		if (drawPoints.size() == 0) {
+			VE::Point start(mousePressPos.x(), mousePressPos.y());
+			transform.applyInv(start);
+			VectorGraphic::CPParams params = ClosestLinePosition(start, snapType, 4);
+			if (params.ptIdx >= 0) drawPoints.push_back(params.closestPt);
+			else drawPoints.push_back(start);
+		}
+		if (VE::Distance2(mouse, drawPoints.back()) > 1) {
+			drawPoints.push_back(mouse);
+		}
+		VE::Point end = drawPoints.back();
+
+		if (drawPoints.size() > 1) {
+			VectorGraphic::CPParams params = ClosestLinePosition(end, snapType, 4);
+			if (params.ptIdx >= 0 && params.closestPt != drawPoints[0]) {
+				drawPoints.back() = params.closestPt;
+			}
+		}
+		VE::Polyline pl(drawPoints);
+		pl.Draw(display, transform, &POLYLINE_CONNECT1, true);
+		drawPoints.back() = end;
+	}
+	else {
+		VectorGraphic::CPParams params = ClosestLinePosition(mouse, snapType, 4);
+		VE::Point closest = mouse;
+		if (params.ptIdx >= 0) {
+			closest = params.closestPt;
+		}
+		transform.apply(closest);
+		cv::circle(display, closest, 4, cv::Scalar(200, 255, 150), 2, cv::LINE_AA);
+	}
+}
+
+void ImageViewer::DrawErase()
+{
+}
+
+void ImageViewer::DrawGrab()
+{
+}
+
+void ImageViewer::DrawSmooth()
+{
+}
+
 void ImageViewer::Copy(bool replaceBuffer)
 {
 	if (replaceBuffer)
 		copyPasteBuffer.clear();
 
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
 	if (params.closestPolyline != nullptr) {
 		copyPasteBuffer.push_back(params.closestPolyline);
 	}
@@ -271,7 +325,7 @@ void ImageViewer::ReleaseSplit(QMouseEvent* event)
 	VectorGraphic::CPParams::M method = ShiftPressed()
 		? VectorGraphic::CPParams::M::Split : VectorGraphic::CPParams::M::Segment;
 
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false, method);
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false, method);
 
 	if (params.ptIdx >= 0) {
 		if (method == VectorGraphic::CPParams::M::Split &&
@@ -300,8 +354,8 @@ void ImageViewer::ReleaseConnect(QMouseEvent* event)
 
 	bool snap = CtrlPressed();
 
-	VectorGraphic::CPParams params1 = ClosestLinePosition(pos1, snap, VectorGraphic::CPParams::M::Segment);
-	VectorGraphic::CPParams params2 = ClosestLinePosition(pos2, snap, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params1 = ClosestLinePositionView(pos1, snap, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params2 = ClosestLinePositionView(pos2, snap, VectorGraphic::CPParams::M::Segment);
 	if (params1.ptIdx < 0 || params2.ptIdx < 0)
 		return;
 
@@ -328,7 +382,7 @@ void ImageViewer::ReleaseDelete(QMouseEvent* event)
 	if (event->button() != Qt::LeftButton)
 		return;
 
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
 
 	if (params.ptIdx >= 0) {
 		vectorGraphic().Delete(params.closestPolyline);
@@ -398,6 +452,43 @@ void ImageViewer::ReleaseShapeDelete(QMouseEvent* event)
 		ShowMat();
 }
 
+void ImageViewer::ReleaseDraw(QMouseEvent* event)
+{
+
+	if (drawPoints.size() <= 1) {
+		return;
+	}
+	VE::Point mouse = VEMousePosition();
+	transform.applyInv(mouse);
+
+	if (VE::Distance2(mouse, drawPoints.back()) > 1) {
+		drawPoints.push_back(mouse);
+	}
+
+	VectorGraphic::CPParams::M snapType = CtrlPressed() ? VectorGraphic::CPParams::M::Point
+		: VectorGraphic::CPParams::M::Split;
+	VectorGraphic::CPParams params = ClosestLinePosition(drawPoints.back(), snapType, 4);
+	if (params.ptIdx >= 0 && params.closestPt != drawPoints[0]) {
+		drawPoints.back() = params.closestPt;
+	}
+
+	vectorGraphic().AddPolyline(drawPoints);
+	drawPoints.clear();
+}
+
+void ImageViewer::ReleaseErase(QMouseEvent* event)
+{
+}
+
+void ImageViewer::ReleaseGrab(QMouseEvent* event)
+{
+}
+
+void ImageViewer::ReleaseSmooth(QMouseEvent* event)
+{
+
+}
+
 void ImageViewer::ShowMat()
 {
 	const float visibility = 0.6;
@@ -459,7 +550,7 @@ void ImageViewer::Frame(const VE::Bounds& bounds)
 
 void ImageViewer::FrameSelected()
 {
-	VectorGraphic::CPParams params = ClosestLinePosition(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
+	VectorGraphic::CPParams params = ClosestLinePositionView(VEMousePosition(), false, VectorGraphic::CPParams::M::Segment);
 	if (params.ptIdx >= 0) {
 		Frame(params.closestPolyline->getBounds());
 	}
@@ -613,65 +704,61 @@ void ImageViewer::resizeEvent(QResizeEvent* event)
 {
 	display = cv::Mat(cv::Size(width(), height()), CV_8UC3);
 }
-void ImageViewer::keyPressEvent(QKeyEvent* event)
+inline bool checkKey(QKeyEvent* event, Qt::Key key, int mask = 0) {
+	return (event->key() == key) &&
+		(event->modifiers() == mask);
+}
+void ImageViewer::keyPressEvent(QKeyEvent* e)
 {
+	Qt::Modifier ctrl = Qt::Modifier::CTRL;
+	Qt::Modifier shift = Qt::Modifier::SHIFT;
+	Qt::Modifier alt = Qt::Modifier::ALT;
 
-	if (event->modifiers() == Qt::Modifier::CTRL &&
-		event->key() == Qt::Key_O) FileLoad(true);
-	else if (event->modifiers() == Qt::Modifier::CTRL &&
-		event->key() == Qt::Key_S) FileSave(true);
-	else if (event->modifiers() == Qt::Modifier::CTRL &&
-		event->key() == Qt::Key_S) FileSave(true);
-	else if (event->modifiers() == Qt::Modifier::ALT && 
-		event->key() == Qt::Key_X) ClearShapes(true);
-	else if (event->key() == Qt::Key_X) CalcShapes(true);
+	if (checkKey(e, Qt::Key_O, ctrl)) FileLoad(true);
+	else if (checkKey(e, Qt::Key_S, ctrl)) FileSave(true);
+	else if (checkKey(e, Qt::Key_X, alt)) ClearShapes(true);
+	else if (checkKey(e, Qt::Key_X)) CalcShapes(true);
+	else if (checkKey(e, Qt::Key_O)) setHighlightDistance();
 
 	// reloading
-	else if (event->key() == Qt::Key_R &&
-		event->modifiers() == Qt::Modifier::CTRL) ReloadFrameOrig(true);
-	else if (event->key() == Qt::Key_R &&
-		event->modifiers() == Qt::Modifier::CTRL | Qt::Modifier::SHIFT) ReloadFrameEdit(true);
+	else if (checkKey(e, Qt::Key_R, ctrl)) ReloadFrameOrig(true);
+	else if (checkKey(e, Qt::Key_R, ctrl | shift)) ReloadFrameEdit(true);
 
 	// copy paste
-	else if (event->key() == Qt::Key_C &&
-		event->modifiers() == Qt::Modifier::CTRL) Copy(true);
-	else if (event->key() == Qt::Key_C &&
-		event->modifiers() == Qt::Modifier::CTRL | Qt::Modifier::SHIFT) Copy(false);
-	else if (event->key() == Qt::Key_V &&
-		event->modifiers() == Qt::Modifier::CTRL) Paste();
+	else if (checkKey(e, Qt::Key_C, ctrl)) Copy(true);
+	else if (checkKey(e, Qt::Key_C, ctrl | shift)) Copy(false);
+	else if (checkKey(e, Qt::Key_V, ctrl)) Paste();
 
 	// re-framing
-	else if (event->key() == Qt::Key_F) FrameSelected();
-	else if (event->key() == Qt::Key_G) FrameAll();
-	else if (event->key() == Qt::Key_Home) FrameTrue();
+	else if (checkKey(e, Qt::Key_F)) FrameSelected();
+	else if (checkKey(e, Qt::Key_G)) FrameAll();
+	else if (checkKey(e, Qt::Key_Home)) FrameTrue();
 
-	else if (event->key() == Qt::Key_Q) SnapEndpoints(true);
-	else if (event->key() == Qt::Key_W) RemoveOverlaps(true);
-	else if (event->key() == Qt::Key_E) MergeConnected(true);
-	else if (event->key() == Qt::Key_R) Simplify(true);
-	else if (event->key() == Qt::Key_T) Smooth(true);
-	else if (event->key() == Qt::Key_L) BasicCleanup(true);
+	else if (checkKey(e, Qt::Key_Q)) SnapEndpoints(true);
+	else if (checkKey(e, Qt::Key_W)) RemoveOverlaps(true);
+	else if (checkKey(e, Qt::Key_E)) MergeConnected(true);
+	else if (checkKey(e, Qt::Key_R)) Simplify(true);
+	else if (checkKey(e, Qt::Key_T)) Smooth(true);
+	else if (checkKey(e, Qt::Key_L)) BasicCleanup(true);
 
-	else if (event->key() == Qt::Key_D) ComputeConnectionStatus(true);
-	else if (event->key() == Qt::Key_Delete ||
-		event->key() == Qt::Key_Backspace) RemoveUnusedConnections(true);
+	else if (checkKey(e, Qt::Key_D)) ComputeConnectionStatus(true);
+	else if (checkKey(e, Qt::Key_Delete) ||
+		checkKey(e,  Qt::Key_Backspace)) RemoveUnusedConnections(true);
 
-	else if (event->key() == Qt::Key_S) NextFrame(true);
-	else if (event->key() == Qt::Key_A) PrevFrame(true);
+	else if (checkKey(e, Qt::Key_S)) NextFrame(true);
+	else if (checkKey(e, Qt::Key_A)) PrevFrame(true);
 
-	else if (event->modifiers() == Qt::KeypadModifier) {
-		if (event->key() == Qt::Key_1)
-			wMainMenu->setCurrentIndex(0);
-		if (event->key() == Qt::Key_2)
-			wMainMenu->setCurrentIndex(1);
-		if (event->key() == Qt::Key_3)
-			wMainMenu->setCurrentIndex(2);
-	}
-	else if (event->key() == Qt::Key_1) interactionButtons[InteractionMode::Examine]->click();
-	else if (event->key() == Qt::Key_2) interactionButtons[InteractionMode::Split]->click();
-	else if (event->key() == Qt::Key_3) interactionButtons[InteractionMode::Connect]->click();
-	else if (event->key() == Qt::Key_4) interactionButtons[InteractionMode::Delete]->click();
-	else if (event->key() == Qt::Key_5) interactionButtons[InteractionMode::ShapeColor]->click();
+	else if (checkKey(e, Qt::Key_1, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(0);
+	else if (checkKey(e,  Qt::Key_2, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(1);
+	else if (checkKey(e, Qt::Key_3, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(2);
+
+	else if (checkKey(e, Qt::Key_1)) interactionButtons[InteractionMode::Examine]->click();
+	else if (checkKey(e, Qt::Key_2)) interactionButtons[InteractionMode::Split]->click();
+	else if (checkKey(e, Qt::Key_3)) interactionButtons[InteractionMode::Connect]->click();
+	else if (checkKey(e, Qt::Key_4)) interactionButtons[InteractionMode::Delete]->click();
+	else if (checkKey(e, Qt::Key_5)) interactionButtons[InteractionMode::ShapeColor]->click();
+	else if (checkKey(e, Qt::Key_B)) interactionButtons[InteractionMode::Draw]->click();
+	else if (checkKey(e, Qt::Key_S)) interactionButtons[InteractionMode::Smooth]->click();
 }
 
 
@@ -836,49 +923,56 @@ void ImageViewer::PrevFrame(bool checked)
 	ShowMat();
 }
 
-void ImageViewer::ctExamine(bool checked)
+void ImageViewer::changeToMode(InteractionMode mode, VoidFunc drawFunc, QMouseFunc releaseFunc)
 {
-	mode = InteractionMode::Examine;
-	interactionDraw = &ImageViewer::DrawExamine;
-	interactionRelease = nullptr;
+	mode = mode;
+	interactionDraw = drawFunc;
+	interactionRelease = releaseFunc;
 	ShowMat();
 }
 
-void ImageViewer::ctSplit(bool checked)
-{
-	mode = InteractionMode::Split;
-	interactionDraw = &ImageViewer::DrawSplit;
-	interactionRelease = &ImageViewer::ReleaseSplit;
-	ShowMat();
+void ImageViewer::ctExamine(bool checked) { 
+	changeToMode(InteractionMode::Examine, &ImageViewer::DrawExamine, nullptr);
 }
-
-void ImageViewer::ctConnect(bool checked)
-{
-	mode = InteractionMode::Connect;
-	interactionDraw = &ImageViewer::DrawConnect;
-	interactionRelease = &ImageViewer::ReleaseConnect;
-	ShowMat();
+void ImageViewer::ctSplit(bool checked) {
+	changeToMode(InteractionMode::Split, &ImageViewer::DrawSplit, &ImageViewer::ReleaseSplit);
 }
-
-void ImageViewer::ctDelete(bool checked)
-{
-	mode = InteractionMode::Delete;
-	interactionDraw = &ImageViewer::DrawDelete;
-	interactionRelease = &ImageViewer::ReleaseDelete;
-	ShowMat();
+void ImageViewer::ctConnect(bool checked) {
+	changeToMode(InteractionMode::Connect, &ImageViewer::DrawConnect, &ImageViewer::ReleaseConnect);
 }
-
-void ImageViewer::ctShapeColor(bool checked)
-{
-	mode = InteractionMode::ShapeColor;
-	interactionDraw = nullptr;
-	interactionRelease = &ImageViewer::ReleaseShapeColor;
-	ShowMat();
+void ImageViewer::ctDelete(bool checked) {
+	changeToMode(InteractionMode::Delete, &ImageViewer::DrawDelete, &ImageViewer::ReleaseDelete);
+}
+void ImageViewer::ctShapeColor(bool checked) {
+	changeToMode(InteractionMode::ShapeColor, nullptr, &ImageViewer::ReleaseShapeColor);
+}
+void ImageViewer::ctDraw(bool checked) {
+	changeToMode(InteractionMode::Draw, &ImageViewer::DrawDraw, &ImageViewer::ReleaseDraw);
+}
+void ImageViewer::ctErase(bool checked) {
+	changeToMode(InteractionMode::Erase, &ImageViewer::DrawErase, &ImageViewer::ReleaseErase);
+}
+void ImageViewer::ctGrab(bool checked) {
+	changeToMode(InteractionMode::Grab, &ImageViewer::DrawGrab, &ImageViewer::ReleaseGrab);
+}
+void ImageViewer::ctSmooth(bool checked) {
+	changeToMode(InteractionMode::Smooth, &ImageViewer::DrawSmooth, &ImageViewer::ReleaseSmooth);
 }
 
 void ImageViewer::setHighlightDistance(double value)
 {
 	this->HIGHLIGHT_DISTANCE = (float)value;
+}
+
+void ImageViewer::setHighlightDistance()
+{
+	float value = this->HIGHLIGHT_DISTANCE;
+
+	InputDialog d;
+	d.AddItem(value, "Highlight Distance", 0.1, 200);
+	bool result = d.exec();
+	if (result)
+		setHighlightDistance(value);
 }
 
 void ImageViewer::FileLoad(bool checked)

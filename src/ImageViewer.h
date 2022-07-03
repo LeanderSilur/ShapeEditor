@@ -55,7 +55,7 @@ private:
 
 	const Pixel BACKGROUND_COLOR = Pixel(200, 200, 200);
 
-	std::string WORKING_DIRECTORY = "D:/190725_sequence_colorization/files/malila/rgb";
+	std::string WORKING_DIRECTORY = "D:/";
 
 	VE::Transform transform;
 	std::vector<Animation::Frame> frames;
@@ -78,6 +78,10 @@ private:
 		Connect,
 		Delete,
 		ShapeColor,
+		Draw,
+		Erase,
+		Grab,
+		Smooth,
 	};
 	QTabWidget* wMainMenu;
 	QLabel* lInfoText;
@@ -89,8 +93,9 @@ private:
 	QMouseFunc interactionRelease = nullptr;
 
 	// Get the closest line and point. ptIdx will be -1 if no close points are found.
-	VectorGraphic::CPParams ClosestLinePosition(const VE::Point& target, bool snapEndpoints,
+	VectorGraphic::CPParams ClosestLinePositionView(const VE::Point& target, bool snapEndpoints,
 		const VectorGraphic::CPParams::M& method = VectorGraphic::CPParams::M::Point);
+	VectorGraphic::CPParams ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2);
 
 	// Draw Functions
 	void DrawHighlight(const cv::Scalar & color);
@@ -99,6 +104,11 @@ private:
 	void DrawSplit();
 	void DrawConnect();
 	void DrawDelete();
+	void DrawDraw();
+	void DrawErase();
+	void DrawGrab();
+	void DrawSmooth();
+
 
 	// Copy Paste
 	std::vector<VE::PolylinePtr> copyPasteBuffer;
@@ -111,6 +121,11 @@ private:
 	void ReleaseDelete(QMouseEvent* event);
 	void ReleaseShapeColor(QMouseEvent* event);
 	void ReleaseShapeDelete(QMouseEvent* event);
+	void ReleaseDraw(QMouseEvent* event);
+	void ReleaseErase(QMouseEvent* event);
+	void ReleaseGrab(QMouseEvent* event);
+	void ReleaseSmooth(QMouseEvent* event);
+
 
 	void ShowMat();
 	void Frame(const VE::Bounds& bounds);
@@ -126,9 +141,11 @@ private:
 	bool AltPressed();
 
 	QPoint mousePressPos;
-	QPoint mousePrevPos;
+	QPoint mousePrevPos; // for dragging the view
 	bool lmbHold = false;
 	InteractionMode mode = InteractionMode::Examine;
+
+	std::vector<VE::Point> drawPoints;
 
 	void WorkingDirSave();
 	void WorkingDirRead();
@@ -163,17 +180,21 @@ public slots:
 	void NextFrame(bool checked);
 	void PrevFrame(bool checked);
 
-	// Change modes (Lines)
+	// Change modes
+	void changeToMode(InteractionMode mode, VoidFunc interactionDraw, QMouseFunc interactionRelease);
 	void ctExamine(bool checked);
 	void ctSplit(bool checked);
 	void ctConnect(bool checked);
 	void ctDelete(bool checked);
-
-	// Change modes (Shapes)
+	void ctDraw(bool checked);
+	void ctErase(bool checked);
+	void ctGrab(bool checked);
+	void ctSmooth(bool checked);
 	void ctShapeColor(bool checked);
 
 	// Change Snapping Distance
 	void setHighlightDistance(double value);
+	void setHighlightDistance();
 
 	void FileLoad(bool checked);
 	void FileSave(bool checked);
