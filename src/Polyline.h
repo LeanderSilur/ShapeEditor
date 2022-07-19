@@ -12,6 +12,7 @@ namespace VE {
 		// connectivity status
 		enum class LineStat { std, loop, invalid };
 	protected:
+		std::vector<PolyshapePtr> attachedShapes;
 		std::vector<Point> points;
 		std::vector<Point> simplifiedPoints;
 		float simple_maxDist2 = -1;
@@ -39,6 +40,9 @@ namespace VE {
 		const Point& getPoint(const int& i) { return points[i]; };
 		const std::vector<Point>& getPoints();
 
+		//void attachShape(const PolyshapePtr shapes);
+		//void detachShape(const PolyshapePtr shapes);
+
 		const std::vector<Point>& getSimplified(float maxDist2);
 	private:
 		void UpdateSimplifiedPoints();
@@ -63,6 +67,7 @@ namespace VE {
 
 		void Simplify(const float& maxDist);
 		void Smooth(const int& iterations = 10, const float& lambda = 0.5);
+		void SmoothWeighted(std::vector<float>& weights, const int& iterations = 10, const float& lambda = 0.5);
 
 		void UpdateStatus() { status = getStatus(); }
 		void ResetStatus() { status = LineStat::std; };

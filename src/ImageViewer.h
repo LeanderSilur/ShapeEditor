@@ -38,6 +38,16 @@ private:
 	// than this value will be merged together in Polyline::Simplify()
 	float SIMPLIFY_MAX_DIST = 2.0f;
 
+	// Used in selective line smoothing
+	float DRAW_SPACING2 = 1.0f;
+	float DRAW_SNAP2 = 9.0f;
+	float DRAW_SNAP_ENDS2 = 36.0f;
+	int DRAW_SMOOTH_ITER = 3;
+	float DRAW_SMOOTH_LAMBDA = 0.5f;
+	float SMOOTHBRUSH_MAX_DIST = 40.0f;
+	int SMOOTHBRUSH_ITER = 2;
+	float SMOOTHBRUSH_LAMBDA = 0.5f;
+
 	// Color which is used, when coloring a shape. Helpful, that it transcends a single graphic.
 	VE::ColorAreaPtr ActiveColor = std::make_shared<VE::ColorArea>();
 
@@ -52,6 +62,7 @@ private:
 	const cv::Scalar POLYLINE_CONNECT2 = cv::Scalar(30, 255, 30);
 	const cv::Scalar POLYLINE_CONNECT_LINE = cv::Scalar(60, 150, 100);
 	const cv::Scalar POLYLINE_DELETE = cv::Scalar(255, 0, 0);
+	const cv::Scalar POLYLINE_SMOOTH= cv::Scalar(50, 200, 240);
 
 	const Pixel BACKGROUND_COLOR = Pixel(200, 200, 200);
 
@@ -95,7 +106,7 @@ private:
 	// Get the closest line and point. ptIdx will be -1 if no close points are found.
 	VectorGraphic::CPParams ClosestLinePositionView(const VE::Point& target, bool snapEndpoints,
 		const VectorGraphic::CPParams::M& method = VectorGraphic::CPParams::M::Point);
-	VectorGraphic::CPParams ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2);
+	VectorGraphic::CPParams ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2, float snapEndpointDist2 = 0.0);
 
 	// Draw Functions
 	void DrawHighlight(const cv::Scalar & color);

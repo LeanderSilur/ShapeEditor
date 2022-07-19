@@ -121,6 +121,28 @@ namespace VE {
 		}
 	}
 
+	void Polyline::SmoothWeighted(std::vector<float>& weights, const int& iterations, const float& lambda)
+	{
+		assert(points.size() == weights.size());
+		simple_maxDist2 = -1;
+
+		for (int i = 0; i < iterations; ++i)
+		{
+			for (int j = 1; j < (int)points.size() - 1; j++)
+			{
+				Point& prev = points[j - 1] - points[j];
+				Point& next = points[j + 1] - points[j];
+				float nPrev = Mag(prev),
+					nNext = Mag(next);
+				float wPrev = 1 / nPrev,
+					wNext = 1 / nNext;
+
+				Point L = (wPrev * prev + wNext * next) / (wPrev + wNext);
+				points[j] += lambda * L * weights[j];
+			}
+		}
+	}
+
 	void Polyline::Draw(cv::Mat& img, Transform& t, const cv::Scalar * colorOverride, bool circles)
 	{
 		// If this object has not loaded yet, don't draw anything.

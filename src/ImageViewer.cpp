@@ -150,15 +150,16 @@ VectorGraphic::CPParams ImageViewer::ClosestLinePositionView(const VE::Point& ta
 	return params;
 }
 
-VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2)
+VectorGraphic::CPParams ImageViewer::ClosestLinePosition(const VE::Point& target, const VectorGraphic::CPParams::M& method, float maxDist2, float snapEndsDist2)
 {
 	VE::Bounds bounds(0, 0, display.cols, display.rows);
+	transform.applyInv(bounds);
 	VE::Point tTarget = target;
 
 	VectorGraphic::CPParams params(tTarget);
 	params.distance2 = maxDist2;
 	params.bounds = &bounds;
-	params.snapEndpoints2 = 0.0;
+	params.snapEndpoints2 = snapEndsDist2;
 	params.method = method;
 
 	vectorGraphic().ClosestPolyline(params);
@@ -247,8 +248,10 @@ void ImageViewer::DrawDelete()
 void ImageViewer::DrawDraw()
 {
 	VectorGraphic::CPParams::M snapType = CtrlPressed() ? VectorGraphic::CPParams::M::Point
-		: VectorGraphic::CPParams::M::Split;
+		: VectorGraphic::CPParams::M::Segment;
 
+	float endpointSnapDist2 = ShiftPressed() ? DRAW_SNAP_ENDS2 / transform.scale / transform.scale : 0.0f;
+	float snapDist2 = DRAW_SNAP2 / transform.scale / transform.scale;
 	VE::Point mouse = VEMousePosition();
 	transform.applyInv(mouse);
 
@@ -256,17 +259,17 @@ void ImageViewer::DrawDraw()
 		if (drawPoints.size() == 0) {
 			VE::Point start(mousePressPos.x(), mousePressPos.y());
 			transform.applyInv(start);
-			VectorGraphic::CPParams params = ClosestLinePosition(start, snapType, 4);
+			VectorGraphic::CPParams params = ClosestLinePosition(start, snapType, snapDist2, endpointSnapDist2);
 			if (params.ptIdx >= 0) drawPoints.push_back(params.closestPt);
 			else drawPoints.push_back(start);
 		}
-		if (VE::Distance2(mouse, drawPoints.back()) > 1) {
+		if (VE::Distance2(mouse, drawPoints.back()) > DRAW_SPACING2) {
 			drawPoints.push_back(mouse);
 		}
 		VE::Point end = drawPoints.back();
 
 		if (drawPoints.size() > 1) {
-			VectorGraphic::CPParams params = ClosestLinePosition(end, snapType, 4);
+			VectorGraphic::CPParams params = ClosestLinePosition(end, snapType, snapDist2, endpointSnapDist2);
 			if (params.ptIdx >= 0 && params.closestPt != drawPoints[0]) {
 				drawPoints.back() = params.closestPt;
 			}
@@ -276,7 +279,7 @@ void ImageViewer::DrawDraw()
 		drawPoints.back() = end;
 	}
 	else {
-		VectorGraphic::CPParams params = ClosestLinePosition(mouse, snapType, 4);
+		VectorGraphic::CPParams params = ClosestLinePosition(mouse, snapType, snapDist2, endpointSnapDist2);
 		VE::Point closest = mouse;
 		if (params.ptIdx >= 0) {
 			closest = params.closestPt;
@@ -296,6 +299,62 @@ void ImageViewer::DrawGrab()
 
 void ImageViewer::DrawSmooth()
 {
+	VE::Point mouse = VEMousePosition();
+	VectorGraphic::CPParams params = ClosestLinePositionView(mouse, false, VectorGraphic::CPParams::M::Segment);
+	
+	if (params.ptIdx >= 0) {
+		if (!ShiftPressed()) {
+			cv::circle(display, params.closestPt, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
+			params.closestPolyline->Draw(display, transform, &POLYLINE_SMOOTH, true);
+			return;
+		}
+		VE::Point canvasPos = mouse;
+		transform.applyInv(canvasPos);
+
+		size_t len = params.closestPolyline->Length();
+		size_t it = params.ptIdx;
+		std::vector<VE::Point> line = params.closestPolyline->getPoints();
+
+		VE::Point lastPt = params.closestPt;
+		VE::Point lastPtCanvas = lastPt;
+		transform.apply(lastPtCanvas);
+		float minDist2 = 6 / transform.scale / transform.scale;
+		float range = SMOOTHBRUSH_MAX_DIST / transform.scale;
+		if (it > 0) {
+			for (int i = it - 1; i >= 0; i--)
+			{
+				if (VE::Distance2(lastPt, line[i]) > minDist2) {
+					VE::Point lastPt = line[i];
+					float intensity = 1 - VE::Distance(lastPt, canvasPos) / range;
+					if (intensity < 0) break;
+
+					VE::Point nextPtCanvas = lastPt;
+					transform.apply(nextPtCanvas);
+					cv::Scalar c = POLYLINE_SMOOTH * intensity;
+					cv::line(display, lastPtCanvas, nextPtCanvas, c, 2, cv::LINE_AA);
+					lastPtCanvas = nextPtCanvas;
+				}
+			}
+		}
+		lastPt = params.closestPt;
+		lastPtCanvas = lastPt;
+		transform.apply(lastPtCanvas);
+
+		for (int i = it + 1; i < len; i++)
+		{
+			if (VE::Distance2(lastPt, line[i]) > minDist2) {
+				VE::Point lastPt = line[i];
+				float intensity = 1 - VE::Distance(lastPt, canvasPos) / range;
+				if (intensity < 0) break;
+
+				VE::Point nextPtCanvas = lastPt;
+				transform.apply(nextPtCanvas);
+				cv::Scalar c = POLYLINE_SMOOTH * intensity;
+				cv::line(display, lastPtCanvas, nextPtCanvas, c, 2, cv::LINE_AA);
+				lastPtCanvas = nextPtCanvas;
+			}
+		}
+	}
 }
 
 void ImageViewer::Copy(bool replaceBuffer)
@@ -466,13 +525,25 @@ void ImageViewer::ReleaseDraw(QMouseEvent* event)
 	}
 
 	VectorGraphic::CPParams::M snapType = CtrlPressed() ? VectorGraphic::CPParams::M::Point
-		: VectorGraphic::CPParams::M::Split;
-	VectorGraphic::CPParams params = ClosestLinePosition(drawPoints.back(), snapType, 4);
+		: VectorGraphic::CPParams::M::Segment;
+	float snapEnds2 = ShiftPressed() ? DRAW_SNAP_ENDS2 / transform.scale / transform.scale : 0.0f;
+	float snapDist2 = DRAW_SNAP2 / transform.scale / transform.scale;
+	VectorGraphic::CPParams params = ClosestLinePosition(drawPoints.back(), snapType, snapDist2, snapEnds2);
 	if (params.ptIdx >= 0 && params.closestPt != drawPoints[0]) {
 		drawPoints.back() = params.closestPt;
+		vectorGraphic().Split(params.closestPolyline, params.ptIdx);
+	}
+	else {
+		if (VE::Distance2(drawPoints.back(), drawPoints.front()) < std::max(snapEnds2, snapDist2)) {
+			drawPoints.push_back(drawPoints.front());
+		}
 	}
 
-	vectorGraphic().AddPolyline(drawPoints);
+	VectorGraphic::CPParams paramsStart = ClosestLinePosition(drawPoints.front(), VectorGraphic::CPParams::M::Point, 0, 0);
+	if (paramsStart.ptIdx >= 0) vectorGraphic().Split(paramsStart.closestPolyline, paramsStart.ptIdx);
+
+	VE::PolylinePtr ptr = vectorGraphic().AddPolyline(drawPoints);
+	ptr->Smooth(DRAW_SMOOTH_ITER, DRAW_SMOOTH_LAMBDA);
 	drawPoints.clear();
 }
 
@@ -486,7 +557,43 @@ void ImageViewer::ReleaseGrab(QMouseEvent* event)
 
 void ImageViewer::ReleaseSmooth(QMouseEvent* event)
 {
+	VE::Point mouse = VEMousePosition();
+	VectorGraphic::CPParams params = ClosestLinePositionView(mouse, false, VectorGraphic::CPParams::M::Segment);
 
+	if (params.ptIdx >= 0) {
+		VE::Point canvasPos = mouse;
+		if (!ShiftPressed()) {
+			cv::circle(display, params.closestPt, 4, cv::Scalar(100, 255, 150), 2, cv::LINE_AA);
+			params.closestPolyline->Smooth(SMOOTHBRUSH_ITER, SMOOTHBRUSH_LAMBDA);
+			ShowMat();
+			return;
+		}
+		transform.applyInv(canvasPos);
+
+		size_t len = params.closestPolyline->Length();
+		size_t it = params.ptIdx;
+		std::vector<VE::Point> line = params.closestPolyline->getPoints();
+		std::vector<float> intensities(line.size(), 0.0f);
+
+		float range = SMOOTHBRUSH_MAX_DIST / transform.scale;
+		for (int i = it; i >= 0; i--)
+		{
+			float intensity = 1 - VE::Distance(line[i], canvasPos) / range;
+			if (intensity < 0) break;
+			intensities[i] = intensity;
+		}
+
+		for (int i = it + 1; i < len; i++)
+		{
+			float intensity = 1 - VE::Distance(line[i], canvasPos) / range;
+			if (intensity < 0) break;
+			intensities[i] = intensity;
+		}
+
+		params.closestPolyline->SmoothWeighted(intensities, SMOOTHBRUSH_ITER, SMOOTHBRUSH_LAMBDA);
+
+		ShowMat();
+	}
 }
 
 void ImageViewer::ShowMat()
@@ -541,10 +648,12 @@ void ImageViewer::Frame(const VE::Bounds& bounds)
 {
 	float x_scale = display.cols / (bounds.x1 - bounds.x0);
 	float y_scale = display.rows / (bounds.y1 - bounds.y0);
+	float w = bounds.x1 - bounds.x0;
+	float h = bounds.y1 - bounds.y0;
 
-	transform.scale = std::min(x_scale, y_scale);
-	transform.x = -transform.scale * bounds.x0;
-	transform.y = -transform.scale * bounds.y0;
+	transform.scale = std::min(x_scale, y_scale) * 0.95;
+	transform.x = display.cols / 2 - (w / 2 + bounds.x0) * transform.scale;
+	transform.y = display.rows / 2  -(h / 2 + bounds.y0) * transform.scale;
 	ShowMat();
 }
 
@@ -571,6 +680,7 @@ void ImageViewer::FrameTrue()
 	transform.scale = 1;
 	transform.x = 0;
 	transform.y = 0;
+	ShowMat();
 }
 
 QPoint ImageViewer::QMousePosition()
@@ -708,6 +818,10 @@ inline bool checkKey(QKeyEvent* event, Qt::Key key, int mask = 0) {
 	return (event->key() == key) &&
 		(event->modifiers() == mask);
 }
+inline bool checkKeyCtrl(QKeyEvent* event, Qt::Key key, int mask = 0) {
+	return (event->key() == key) &&
+		(event->modifiers() == mask || event->modifiers() == ((Qt::Modifier)mask | Qt::Modifier::CTRL));
+}
 void ImageViewer::keyPressEvent(QKeyEvent* e)
 {
 	Qt::Modifier ctrl = Qt::Modifier::CTRL;
@@ -715,9 +829,9 @@ void ImageViewer::keyPressEvent(QKeyEvent* e)
 	Qt::Modifier alt = Qt::Modifier::ALT;
 
 	if (checkKey(e, Qt::Key_O, ctrl)) FileLoad(true);
-	else if (checkKey(e, Qt::Key_S, ctrl)) FileSave(true);
-	else if (checkKey(e, Qt::Key_X, alt)) ClearShapes(true);
-	else if (checkKey(e, Qt::Key_X)) CalcShapes(true);
+	else if (checkKey(e, Qt::Key_P, ctrl)) FileSave(true);
+	else if (checkKey(e, Qt::Key_M, alt)) ClearShapes(true);
+	else if (checkKey(e, Qt::Key_M)) CalcShapes(true);
 	else if (checkKey(e, Qt::Key_O)) setHighlightDistance();
 
 	// reloading
@@ -731,34 +845,36 @@ void ImageViewer::keyPressEvent(QKeyEvent* e)
 
 	// re-framing
 	else if (checkKey(e, Qt::Key_F)) FrameSelected();
-	else if (checkKey(e, Qt::Key_G)) FrameAll();
-	else if (checkKey(e, Qt::Key_Home)) FrameTrue();
+	else if (checkKey(e, Qt::Key_F, shift)) FrameAll();
+	else if (checkKey(e, Qt::Key_F, alt) || checkKey(e, Qt::Key_Home)) FrameTrue();
 
-	else if (checkKey(e, Qt::Key_Q)) SnapEndpoints(true);
+	else if (checkKeyCtrl(e, Qt::Key_Q)) SnapEndpoints(true);
 	else if (checkKey(e, Qt::Key_W)) RemoveOverlaps(true);
-	else if (checkKey(e, Qt::Key_E)) MergeConnected(true);
-	else if (checkKey(e, Qt::Key_R)) Simplify(true);
-	else if (checkKey(e, Qt::Key_T)) Smooth(true);
+	else if (checkKeyCtrl(e, Qt::Key_E)) MergeConnected(true);
+	else if (checkKey(e, Qt::Key_R)) ComputeConnectionStatus(true);
+	else if (checkKey(e, Qt::Key_Delete) ||
+		checkKey(e, Qt::Key_Backspace)) RemoveUnusedConnections(true);
+
+	else if (checkKey(e, Qt::Key_J)) Simplify(true);
+	else if (checkKey(e, Qt::Key_K)) Smooth(true);
 	else if (checkKey(e, Qt::Key_L)) BasicCleanup(true);
 
-	else if (checkKey(e, Qt::Key_D)) ComputeConnectionStatus(true);
-	else if (checkKey(e, Qt::Key_Delete) ||
-		checkKey(e,  Qt::Key_Backspace)) RemoveUnusedConnections(true);
-
-	else if (checkKey(e, Qt::Key_S)) NextFrame(true);
-	else if (checkKey(e, Qt::Key_A)) PrevFrame(true);
+	else if (checkKey(e, Qt::Key_X)) NextFrame(true);
+	else if (checkKey(e, Qt::Key_Y)) PrevFrame(true);
 
 	else if (checkKey(e, Qt::Key_1, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(0);
 	else if (checkKey(e,  Qt::Key_2, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(1);
 	else if (checkKey(e, Qt::Key_3, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(2);
+	else if (checkKey(e, Qt::Key_4, Qt::KeypadModifier)) wMainMenu->setCurrentIndex(3);
 
+	// tools
 	else if (checkKey(e, Qt::Key_1)) interactionButtons[InteractionMode::Examine]->click();
 	else if (checkKey(e, Qt::Key_2)) interactionButtons[InteractionMode::Split]->click();
 	else if (checkKey(e, Qt::Key_3)) interactionButtons[InteractionMode::Connect]->click();
 	else if (checkKey(e, Qt::Key_4)) interactionButtons[InteractionMode::Delete]->click();
 	else if (checkKey(e, Qt::Key_5)) interactionButtons[InteractionMode::ShapeColor]->click();
-	else if (checkKey(e, Qt::Key_B)) interactionButtons[InteractionMode::Draw]->click();
-	else if (checkKey(e, Qt::Key_S)) interactionButtons[InteractionMode::Smooth]->click();
+	else if (checkKeyCtrl(e, Qt::Key_B)) interactionButtons[InteractionMode::Draw]->click();
+	else if (checkKeyCtrl(e, Qt::Key_S)) interactionButtons[InteractionMode::Smooth]->click();
 }
 
 
@@ -947,6 +1063,21 @@ void ImageViewer::ctShapeColor(bool checked) {
 	changeToMode(InteractionMode::ShapeColor, nullptr, &ImageViewer::ReleaseShapeColor);
 }
 void ImageViewer::ctDraw(bool checked) {
+	if (CtrlPressed()) {
+		InputDialog d;
+		DRAW_SPACING2 = std::sqrtf(DRAW_SPACING2);
+		DRAW_SNAP2 = std::sqrtf(DRAW_SNAP2);
+		DRAW_SNAP_ENDS2 = std::sqrtf(DRAW_SNAP_ENDS2);
+		d.AddItem(DRAW_SPACING2, "Pixel Spacing", 0, 5);
+		d.AddItem(DRAW_SNAP2, "Snap Strokes", 0, 5);
+		d.AddItem(DRAW_SNAP_ENDS2, "Snap Stroke Ends", 0, 5);
+		d.AddItem(DRAW_SMOOTH_ITER, "Smoothing Iterations", 0, 20);
+		d.AddItem(DRAW_SMOOTH_LAMBDA, "Smoothing Lambda", 0, 20);
+		d.exec();
+		DRAW_SPACING2 = DRAW_SPACING2 * DRAW_SPACING2;
+		DRAW_SNAP2 = DRAW_SNAP2 * DRAW_SNAP2;
+		DRAW_SNAP_ENDS2 = DRAW_SNAP_ENDS2 * DRAW_SNAP_ENDS2;
+	}
 	changeToMode(InteractionMode::Draw, &ImageViewer::DrawDraw, &ImageViewer::ReleaseDraw);
 }
 void ImageViewer::ctErase(bool checked) {
@@ -956,6 +1087,13 @@ void ImageViewer::ctGrab(bool checked) {
 	changeToMode(InteractionMode::Grab, &ImageViewer::DrawGrab, &ImageViewer::ReleaseGrab);
 }
 void ImageViewer::ctSmooth(bool checked) {
+	if (CtrlPressed()) {
+		InputDialog d;
+		d.AddItem(SMOOTHBRUSH_MAX_DIST, "Maximum Smoothing Distance", 0, 100);
+		d.AddItem(SMOOTHBRUSH_ITER, "Iterations", 0, 12);
+		d.AddItem(SMOOTHBRUSH_LAMBDA, "Lambda", 0, 2);
+		d.exec();
+	}
 	changeToMode(InteractionMode::Smooth, &ImageViewer::DrawSmooth, &ImageViewer::ReleaseSmooth);
 }
 
